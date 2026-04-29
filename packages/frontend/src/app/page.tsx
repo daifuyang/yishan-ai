@@ -3,26 +3,13 @@
 import React, { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarProvider,
-  SidebarInset,
-  SidebarRail,
-} from "@/components/ui/sidebar";
+import { ChatLayout } from "@/components/layout/ChatLayout";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-
 import { useSessionStore } from "@/stores/session-store";
 import { useChatStore } from "@/stores/chat-store";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { EmptyState } from "@/components/chat/empty-state";
-import { SidebarHeader as AppSidebarHeader } from "@/components/sidebar/SidebarHeader";
-import { SessionList } from "@/components/sidebar/SessionList";
-import { SidebarFooter as AppSidebarFooter } from "@/components/sidebar/SidebarFooter";
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
@@ -107,39 +94,12 @@ function ChatContentWithParams() {
   return <ChatContent sessionId={sessionId} />;
 }
 
-function AppSidebar() {
-  const { fetchSessions } = useSessionStore();
-
-  React.useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
-
-  return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader>
-        <AppSidebarHeader />
-      </SidebarHeader>
-      <SidebarContent>
-        <Separator className="mb-2" />
-        <SessionList />
-      </SidebarContent>
-      <SidebarFooter>
-        <AppSidebarFooter />
-      </SidebarFooter>
-    </Sidebar>
-  );
-}
-
 export default function HomePage() {
   return (
-    <SidebarProvider defaultOpen>
-      <AppSidebar />
-      <SidebarInset>
-        <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
-          <ChatContentWithParams />
-        </Suspense>
-      </SidebarInset>
-      <SidebarRail />
-    </SidebarProvider>
+    <ChatLayout>
+      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+        <ChatContentWithParams />
+      </Suspense>
+    </ChatLayout>
   );
 }

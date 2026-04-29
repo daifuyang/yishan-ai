@@ -8,6 +8,7 @@
 - **会话管理** - 自动保存对话历史，侧边栏展示会话列表
 - **Plan/Build 双模式** - Plan 模式预览执行步骤，Build 模式逐步执行
 - **会话恢复** - 刷新页面自动恢复流式输出
+- **offcanvas 侧边栏** - 折叠后完全消失，左上角悬浮展开按钮
 
 ## 技术栈
 
@@ -24,7 +25,7 @@
 # 安装依赖
 pnpm install
 
-# 开发模式
+# 开发模式 (前端端口 4810，后端端口 4800)
 pnpm dev
 
 # 构建并启动
@@ -41,8 +42,15 @@ packages/
 ├── frontend/          # Next.js 前端应用
 │   └── src/
 │       ├── app/           # 页面路由
-│       ├── components/     # React 组件
-│       └── stores/         # Zustand 状态管理
+│       │   ├── page.tsx           # 首页 (/)
+│       │   └── history/page.tsx   # 历史会话 (/history)
+│       ├── components/
+│       │   ├── layout/            # 共享布局组件
+│       │   │   ├── ChatLayout.tsx    # 侧边栏 + 主内容区布局
+│       │   │   └── AppSidebar.tsx    # 侧边栏内容
+│       │   ├── chat/               # 聊天相关组件
+│       │   └── ui/                 # shadcn UI 组件
+│       └── stores/                 # Zustand 状态管理
 ├── backend/           # Fastify 后端服务
 │   └── src/
 │       ├── routes/         # API 路由
@@ -75,6 +83,17 @@ PM2 → Fastify :4800
 | POST | /api/sessions/:id/chat/stream | 发起流式对话 |
 | GET | /api/sessions/:id/chat/subscribe | 订阅流式输出 (SSE) |
 | POST | /api/sessions/:id/chat/stop | 停止流式输出 |
+
+## UI 设计
+
+采用纯黑白灰配色，offcanvas 侧边栏模式：
+
+- **侧边栏**：默认展开，折叠后完全消失
+- **展开按钮**：左上角悬浮 PanelRight 图标，点击展开
+- **选中态**：`bg-black text-white`
+- **hover 效果**：`hover:bg-black/10`
+
+详见 [UI 设计规范](docs/15-ui-spec.md)
 
 ## License
 
