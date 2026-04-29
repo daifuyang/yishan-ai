@@ -5,6 +5,7 @@ import {
   getSession,
   createSession,
   updateSessionTitle,
+  updateSessionPin,
   deleteSession,
 } from '../stores/session-store.js';
 import { getMessages } from '../stores/message-store.js';
@@ -15,7 +16,8 @@ const CreateSessionSchema = z.object({
 });
 
 const UpdateSessionSchema = z.object({
-  title: z.string(),
+  title: z.string().optional(),
+  isPinned: z.boolean().optional(),
 });
 
 const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -41,7 +43,12 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/api/sessions/:id', async (request: any) => {
     const { id } = request.params;
     const body = UpdateSessionSchema.parse(request.body);
-    updateSessionTitle(id, body.title);
+    if (body.title !== undefined) {
+      updateSessionTitle(id, body.title);
+    }
+    if (body.isPinned !== undefined) {
+      updateSessionPin(id, body.isPinned);
+    }
     return getSession(id);
   });
 

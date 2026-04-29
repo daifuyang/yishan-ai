@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useCallback, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { ChatLayout } from "@/components/layout/ChatLayout";
@@ -16,6 +16,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const { sessions, fetchSessions, createSession } = useSessionStore();
   const { messages, isStreaming, streamingContent, fetchMessages, sendMessage, stopStream, clearMessages } = useChatStore();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   React.useEffect(() => {
     fetchSessions();
@@ -23,13 +24,20 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
 
   React.useEffect(() => {
     if (sessionId) {
-      fetchMessages(sessionId);
+      setIsLoading(true);
+      fetchMessages(sessionId)
+        .catch(() => {
+          router.push('/');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     } else {
       clearMessages();
     }
-  }, [sessionId, fetchMessages, clearMessages]);
+  }, [sessionId, fetchMessages, clearMessages, router]);
 
-  const handleSend = async (content: string, model: string, mode: "plan" | "build") => {
+  const handleSend = useCallback(async (content: string, model: string, mode: "plan" | "build") => {
     if (!sessionId) {
       setIsCreatingSession(true);
       const newSessionId = await createSession(model);
@@ -39,20 +47,36 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     } else {
       sendMessage(sessionId, content, model, mode);
     }
-  };
+  }, [sessionId, createSession, sendMessage, router]);
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     if (sessionId) {
       stopStream(sessionId);
     }
-  };
+  }, [sessionId, stopStream]);
 
   const session = sessions.find((s) => s.id === sessionId);
   const hasMessages = messages.length > 0 || isStreaming;
 
+  const shouldShowLoading = isLoading || (sessionId && !session);
+
   return (
     <div className="flex flex-col h-screen">
-      {hasMessages ? (
+      {!sessionId && !hasMessages ? (
+        <div className="flex-1 p-4">
+          <EmptyState
+            onSend={handleSend}
+            onStop={handleStop}
+            isStreaming={isStreaming}
+            disabled={isCreatingSession}
+            defaultModel={session?.model}
+          />
+        </div>
+      ) : shouldShowLoading ? (
+        <div className="flex items-center justify-center h-full">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      ) : (
         <div className="flex flex-col h-full m-4">
           <MessageList
             messages={messages}
@@ -70,16 +94,6 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
               />
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 p-4">
-          <EmptyState
-            onSend={handleSend}
-            onStop={handleStop}
-            isStreaming={isStreaming}
-            disabled={isCreatingSession}
-            defaultModel={session?.model}
-          />
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -31,11 +31,11 @@ export function MessageList({ messages, isStreaming, streamingContent }: Message
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent, isStreaming]);
 
-  const handleCopy = async (content: string, msgId: string) => {
+  const handleCopy = useCallback(async (content: string, msgId: string) => {
     await navigator.clipboard.writeText(content);
     setCopiedId(msgId);
     setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, []);
 
   return (
     <ScrollArea className="flex-1 px-4 py-6">

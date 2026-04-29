@@ -40,15 +40,32 @@
 ├──────────────────────┤
 │  历史会话             │  ← 分组标题（带 History 图标）
 │  ─────────────────  │
-│  ▌会话标题 (选中)    │  ← 左侧黑色边框表示选中态
-│    会话标题          │
-│    ...              │  ← 默认显示 10 条
+│  ▌会话标题 (选中)  [...]│  ← 左侧黑色边框表示选中态，hover 显示 ···
+│    会话标题        [...]│  ← hover 显示 ··· 菜单
+│    ...              │
 ├──────────────────────┤
-│  查看历史 (History)  │  ← 跳转 /history
+│  查看历史 (History)  │  ← 跳转 /history（常显）
 ├──────────────────────┤
 │  设置                │
 └──────────────────────┘
 ```
+
+### 会话项操作菜单
+
+hover 会话项时显示 `···` 按钮，点击展开下拉菜单：
+
+| 操作 | 图标 | 说明 |
+|------|------|------|
+| 编辑标题 | `Pencil` | 弹出 Dialog 修改标题 |
+| 置顶/取消置顶 | `Pin` / `PinOff` | 切换置顶状态 |
+| 删除 | `Trash2` | 弹出 AlertDialog 确认 |
+
+**样式规范**：
+- `···` 按钮：透明背景，`h-6 w-6`，hover 时无背景色
+- Active 会话（黑色背景）：图标白色，hover 显示白色 ring
+- 非 Active 会话：图标 `text-muted-foreground`，hover 变为 `text-foreground`
+- 菜单项：左对齐图标 + 文字，hover 显示 `bg-accent`
+- 删除菜单项：红色文字 `text-red-600`，hover 显示 `bg-red-50`
 
 ### 折叠/展开状态
 
@@ -61,6 +78,65 @@
 | 查看历史 | 显示 | 隐藏 |
 | 设置 | 显示 | 隐藏 |
 | 展开按钮 | 隐藏 | 显示（悬浮） |
+
+### 侧边栏动画与展开按钮的同步
+
+侧边栏收起动画时长为 **200ms**。展开按钮（FloatingExpandIcon）需要等动画完全结束后才显示，避免视觉闪烁。
+
+**实现方案**：使用 `setTimeout` 延迟 200ms 显示图标，而不是 CSS `transition-delay`。
+
+```tsx
+function FloatingExpandIcon() {
+  const { state, toggleSidebar, isMobile, openMobile, setOpenMobile } = useSidebar();
+  const [visible, setVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isMobile) {
+      setVisible(!openMobile);
+    } else if (state === "collapsed") {
+      const timer = setTimeout(() => setVisible(true), 200);
+      return () => clearTimeout(timer);
+    } else {
+      setVisible(false);
+    }
+  }, [state, isMobile, openMobile]);
+
+  if (!visible) return null;
+
+  if (isMobile) {
+    return (
+      <div
+        onClick={() => setOpenMobile(true)}
+        className="fixed left-3 top-[18px] z-50 cursor-pointer p-2 bg-background border rounded-md shadow-md hover:bg-accent"
+      >
+        <PanelRight className="h-4 w-4 text-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={toggleSidebar}
+      className="fixed left-3 top-[18px] z-50 cursor-pointer p-2 hover:bg-black/10 rounded-md"
+    >
+      <PanelRight className="h-4 w-4 text-foreground" />
+    </div>
+  );
+}
+```
+
+**为什么不用 CSS transition-delay**：
+- CSS `transition-delay` 可能因浏览器渲染时机不同步
+- `setTimeout` 更精确可靠，确保动画完成后再显示
+
+### 移动端适配
+
+| 功能 | 桌面端 | 移动端 |
+|------|--------|--------|
+| 侧边栏收起 | 隐藏左侧 | Sheet 抽屉 |
+| 展开按钮 | 悬浮左上角 | 悬浮左上角（位置相同） |
+| 点击会话 | 导航 | 导航并关闭抽屉 |
+| 查看历史 | 常显 | 常显 |
 
 ## 15.2.1 历史会话页面 (/history)
 
@@ -208,6 +284,9 @@
       <span>历史会话</span>
 
       <SessionList />          // 会话列表（flex-1, 可滚动）
+        <SessionItem />         // 单个会话项，含 ··· 下拉菜单
+          <Link />              // 会话链接
+          <DropdownMenu />      // ··· 操作菜单
 
       <Link href="/history">
         <History />
@@ -227,7 +306,7 @@
 
   <SidebarRail />              // 折叠后的小按钮
 
-  <FloatingExpandIcon />       // 悬浮展开按钮（折叠态显示）
+  <FloatingExpandIcon />       // 悬浮展开按钮（桌面端折叠态显示，移动端抽屉关闭态显示）
 </ChatLayout>
 ```
 
@@ -323,6 +402,7 @@ lib/
 | 无气泡消息流 | ✅ | |
 | 最近任务列表 | ✅ | |
 | 会话操作菜单 | ✅ | |
+| 会话置顶 | ✅ | |
 | 思考过程折叠 | ✅ | |
 | 流式输出 + 光标 | ✅ | |
 | 刷新/重连恢复流式 | ✅ | |
@@ -339,7 +419,6 @@ lib/
 | URL 参数规范化 (sessionId) | ✅ | |
 | SCSS 迁移 | ✅ | |
 | 全局搜索 Command+K | | ✅ |
-| 会话置顶 | | ✅ |
 | 追问引导 | | ✅ |
 | 虚拟列表 | | ✅ |
 | 文件上传 | | ✅ |

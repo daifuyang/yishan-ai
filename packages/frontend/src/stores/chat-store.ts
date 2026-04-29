@@ -15,6 +15,7 @@ interface ChatStore {
   fetchMessages: (sessionId: string) => Promise<void>;
   sendMessage: (sessionId: string, content: string, model: string, mode?: 'plan' | 'build') => Promise<void>;
   subscribe: (sessionId: string) => void;
+  unsubscribe: () => void;
   stopStream: (sessionId: string) => Promise<void>;
   clearMessages: () => void;
 }
@@ -83,16 +84,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }));
       } else if (data.type === 'message_stop') {
         set((state) => {
-          const messages = [...state.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = state.messages[state.messages.length - 1];
+          let messages;
           if (lastMsg?.role === 'assistant') {
-            lastMsg.content = state.streamingContent;
+            messages = state.messages.map((msg, idx) =>
+              idx === state.messages.length - 1
+                ? { ...msg, content: state.streamingContent }
+                : msg
+            );
           } else if (state.streamingContent) {
-            messages.push({
-              id: crypto.randomUUID(),
-              role: 'assistant',
-              content: state.streamingContent,
-            });
+            messages = [
+              ...state.messages,
+              { id: crypto.randomUUID(), role: 'assistant' as const, content: state.streamingContent }
+            ];
+          } else {
+            messages = state.messages;
           }
           return { messages, isStreaming: false, streamingContent: '', currentEventSource: null };
         });
@@ -105,8 +111,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     eventSource.onerror = () => {
       eventSource.close();
-      set({ isStreaming: false, currentEventSource: null });
+      set({ isStreaming: false, streamingContent: '', currentEventSource: null });
     };
+  },
+
+  unsubscribe: () => {
+    const eventSource = get().currentEventSource;
+    if (eventSource) {
+      eventSource.close();
+      set({ currentEventSource: null, isStreaming: false, streamingContent: '' });
+    }
   },
 
   stopStream: async (sessionId) => {

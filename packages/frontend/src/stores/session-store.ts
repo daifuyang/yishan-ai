@@ -6,6 +6,7 @@ export interface Session {
   model: string;
   status: 'idle' | 'streaming' | 'completed' | 'failed';
   streamingContent?: string;
+  isPinned: boolean;
   createdAt: number;
   updatedAt: number;
   messageCount?: number;
@@ -17,6 +18,7 @@ interface SessionStore {
   fetchSessions: () => Promise<void>;
   createSession: (model: string) => Promise<string>;
   deleteSession: (id: string) => Promise<void>;
+  updateSession: (id: string, data: { title?: string; isPinned?: boolean }) => Promise<void>;
   setActiveId: (id: string | null) => void;
 }
 
@@ -48,6 +50,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions: state.sessions.filter((s) => s.id !== id),
       activeId: state.activeId === id ? null : state.activeId,
+    }));
+  },
+
+  updateSession: async (id: string, data: { title?: string; isPinned?: boolean }) => {
+    await fetch(`${API_BASE}/api/sessions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    set((state) => ({
+      sessions: [...state.sessions]
+        .map((s) => (s.id === id ? { ...s, ...data } : s))
+        .sort((a, b) => {
+          if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+          return b.updatedAt - a.updatedAt;
+        }),
     }));
   },
 

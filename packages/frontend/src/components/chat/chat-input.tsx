@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -27,21 +27,21 @@ const DEFAULT_MODELS = [
 
 export function ChatInput({ onSend, onStop, isStreaming, disabled, defaultModel = 'MiniMax-M2.7-highspeed', models = DEFAULT_MODELS, noBorder }: ChatInputProps) {
   const [content, setContent] = useState('');
-  const [model, setModel] = useState(defaultModel);
+  const [model, setModel] = useState(() => defaultModel || 'MiniMax-M2.7-highspeed');
   const [mode, setMode] = useState<'plan' | 'build'>('build');
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!content.trim() || disabled || isStreaming) return;
     onSend(content, model, mode);
     setContent('');
-  };
+  }, [content, model, mode, disabled, isStreaming, onSend]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
 
   const isDisabled = disabled || isStreaming;
 

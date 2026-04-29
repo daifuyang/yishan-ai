@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageCirclePlus, ChevronRight, Settings, History } from "lucide-react";
+import { MessageCirclePlus, Settings, History } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/session-store";
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/tooltip";
 import { useSidebar } from "@/components/ui/sidebar";
 import { PanelLeft } from "lucide-react";
-import { DEFAULT_SESSION_LIMIT } from "@/lib/constants";
 
 function LogoIcon() {
   return (
@@ -59,13 +58,11 @@ function LogoIcon() {
 export function AppSidebar() {
   const router = useRouter();
   const { state, toggleSidebar } = useSidebar();
-  const { sessions } = useSessionStore();
-  const hasMore = sessions.length > DEFAULT_SESSION_LIMIT;
   const isCollapsed = state === "collapsed";
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     router.push("/");
-  };
+  }, [router]);
 
   return (
     <div className="flex flex-col h-full">
@@ -111,17 +108,15 @@ export function AppSidebar() {
       </div>
 
       <div className="mt-auto border-t shrink-0">
-        {hasMore && (
-          <div className="px-3 py-2 group-data-[state=collapsed]:hidden">
-            <Link
-              href="/history"
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-black/10 rounded-md transition-colors p-2"
-            >
-              <History className="w-4 h-4" />
-              <span>查看历史</span>
-            </Link>
-          </div>
-        )}
+        <div className="px-3 py-2 group-data-[state=collapsed]:hidden">
+          <Link
+            href="/history"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-black/10 rounded-md transition-colors p-2"
+          >
+            <History className="w-4 h-4" />
+            <span>查看历史</span>
+          </Link>
+        </div>
 
         <div className="group-data-[state=collapsed]:hidden">
           <Tooltip>

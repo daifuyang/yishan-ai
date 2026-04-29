@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Trash2, MessageSquare, Search, X } from "lucide-react";
@@ -55,17 +55,17 @@ function HistoryContent() {
     );
   }, [sessions, searchQuery]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     await deleteSession(id);
-  };
+  }, [deleteSession]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     router.push("/");
-  };
+  }, [router]);
 
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     setSearchQuery("");
-  };
+  }, []);
 
   return (
     <div className="flex flex-col h-screen">

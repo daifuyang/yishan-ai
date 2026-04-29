@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
@@ -49,22 +49,22 @@ function ChatContent({ sessionId }: ChatContentProps) {
     }
   }, [sessionId, fetchMessages]);
 
-  const handleSend = (content: string, model: string, mode: "plan" | "build") => {
+  const handleSend = useCallback((content: string, model: string, mode: "plan" | "build") => {
     if (sessionId) {
       sendMessage(sessionId, content, model, mode);
     }
-  };
+  }, [sessionId, sendMessage]);
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     if (sessionId) {
       stopStream(sessionId);
     }
-  };
+  }, [sessionId, stopStream]);
 
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     const newSessionId = await createSession("MiniMax-M2.7");
     router.push(`/?sessionId=${newSessionId}`);
-  };
+  }, [createSession, router]);
 
   const session = sessions.find((s) => s.id === sessionId);
   const hasMessages = messages.length > 0 || isStreaming;

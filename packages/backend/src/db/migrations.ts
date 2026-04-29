@@ -9,6 +9,7 @@ export function runMigrations(db: Database.Database): void {
       status              TEXT NOT NULL DEFAULT 'idle'
                           CHECK(status IN ('idle', 'streaming', 'completed', 'failed')),
       streaming_content   TEXT,
+      is_pinned           INTEGER NOT NULL DEFAULT 0,
       created_at          INTEGER NOT NULL,
       updated_at          INTEGER NOT NULL
     );

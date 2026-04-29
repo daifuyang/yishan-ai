@@ -1,1 +1,1 @@
-export const DEFAULT_SESSION_LIMIT = 10;
+export const DEFAULT_SESSION_LIMIT = 20;
