@@ -34,7 +34,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
       setIsCreatingSession(true);
       const newSessionId = await createSession(model);
       await sendMessage(newSessionId, content, model, mode);
-      router.push(`/?id=${newSessionId}`);
+      router.push(`/?sessionId=${newSessionId}`);
       setIsCreatingSession(false);
     } else {
       sendMessage(sessionId, content, model, mode);
@@ -53,35 +53,34 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   return (
     <div className="flex flex-col h-screen">
       {hasMessages ? (
-        <>
-          <ScrollArea className="flex-1">
-            <MessageList
-              messages={messages}
-              isStreaming={isStreaming}
-              streamingContent={streamingContent}
-            />
-          </ScrollArea>
-          <ChatInput
+        <div className="flex flex-col h-full m-4">
+          <MessageList
+            messages={messages}
+            isStreaming={isStreaming}
+            streamingContent={streamingContent}
+          />
+          <div className="shrink-0 px-4 pb-4">
+            <div className="max-w-2xl mx-auto">
+              <ChatInput
+                onSend={handleSend}
+                onStop={handleStop}
+                isStreaming={isStreaming}
+                disabled={isCreatingSession}
+                defaultModel={session?.model}
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 p-4">
+          <EmptyState
             onSend={handleSend}
             onStop={handleStop}
             isStreaming={isStreaming}
             disabled={isCreatingSession}
             defaultModel={session?.model}
           />
-        </>
-      ) : (
-        <>
-          <EmptyState />
-          <div className="border-t p-4">
-            <ChatInput
-              onSend={handleSend}
-              onStop={handleStop}
-              isStreaming={isStreaming}
-              disabled={isCreatingSession}
-              defaultModel={session?.model}
-            />
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -89,7 +88,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
 
 function ChatContentWithParams() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get("id");
+  const sessionId = searchParams.get("sessionId");
 
   return <ChatContent sessionId={sessionId} />;
 }
