@@ -10,11 +10,11 @@ import { cn } from "@/lib/utils";
 
 function SessionItem({ session }: { session: Session }) {
   const searchParams = useSearchParams();
-  const isActive = searchParams.get("id") === session.id;
+  const isActive = searchParams.get("sessionId") === session.id;
 
   return (
     <Link
-      href={`/?id=${session.id}`}
+      href={`/?sessionId=${session.id}`}
       className={cn(
         "block px-3 py-2 text-sm rounded-md transition-all truncate",
         !isActive && "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-foreground",

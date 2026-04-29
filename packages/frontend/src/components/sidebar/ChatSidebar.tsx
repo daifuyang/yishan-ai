@@ -1,7 +1,9 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 
 import {
   Sidebar,
@@ -61,7 +63,7 @@ function ChatContent({ sessionId }: ChatContentProps) {
 
   const handleNewChat = async () => {
     const newSessionId = await createSession("MiniMax-M2.7");
-    router.push(`/?id=${newSessionId}`);
+    router.push(`/?sessionId=${newSessionId}`);
   };
 
   const session = sessions.find((s) => s.id === sessionId);
@@ -70,7 +72,7 @@ function ChatContent({ sessionId }: ChatContentProps) {
   return (
     <div className="flex flex-col h-screen">
       {hasMessages ? (
-        <>
+        <div className="flex flex-col h-full border rounded-xl m-4 overflow-hidden">
           <ScrollArea className="flex-1">
             <MessageList
               messages={messages}
@@ -78,25 +80,26 @@ function ChatContent({ sessionId }: ChatContentProps) {
               streamingContent={streamingContent}
             />
           </ScrollArea>
-          <ChatInput
-            onSend={handleSend}
-            onStop={handleStop}
-            isStreaming={isStreaming}
-            defaultModel={session?.model}
-          />
-        </>
-      ) : (
-        <>
-          <EmptyState onNewChat={handleNewChat} />
-          <div className="border-t p-4">
+          <div className="shrink-0">
             <ChatInput
               onSend={handleSend}
               onStop={handleStop}
               isStreaming={isStreaming}
               defaultModel={session?.model}
+              noBorder
             />
           </div>
-        </>
+        </div>
+      ) : (
+        <div className="flex-1 p-4">
+          <EmptyState
+            onSend={handleSend}
+            onStop={handleStop}
+            isStreaming={isStreaming}
+            disabled={false}
+            defaultModel={session?.model}
+          />
+        </div>
       )}
     </div>
   );
@@ -106,8 +109,12 @@ interface AppSidebarProps {
   sessionId: string | null;
 }
 
+const DEFAULT_LIMIT = 10;
+
 function AppSidebar({ sessionId }: AppSidebarProps) {
-  const { fetchSessions } = useSessionStore();
+  const { sessions, fetchSessions } = useSessionStore();
+  const totalCount = sessions.length;
+  const hasMore = totalCount > DEFAULT_LIMIT;
 
   React.useEffect(() => {
     fetchSessions();
@@ -123,6 +130,17 @@ function AppSidebar({ sessionId }: AppSidebarProps) {
         <SessionList />
       </SidebarContent>
       <SidebarFooter>
+        {hasMore && (
+          <div className="px-3 py-2 border-t">
+            <Link
+              href="/history"
+              className="flex items-center justify-between text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <span>查看全部 ({totalCount})</span>
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+        )}
         <AppSidebarFooter />
       </SidebarFooter>
     </Sidebar>

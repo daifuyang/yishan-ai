@@ -21,7 +21,7 @@ function SessionItem({ session, onDelete }: { session: Session; onDelete: (id: s
     >
       <MessageSquare className="w-4 h-4 text-muted-foreground shrink-0" />
       <Link
-        href={`/?id=${session.id}`}
+        href={`/?sessionId=${session.id}`}
         className="flex-1 text-sm truncate hover:text-foreground"
       >
         {session.title || "新对话"}
