@@ -73,3 +73,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+.msg-actions-wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+
+  &:hover .msg-action-btn {
+    opacity: 1;
+  }
+
+  .msg-action-btn {
+    display: inline-block;
+    margin-top: 0.25rem;
+    opacity: 0;
+    transition: opacity 200ms;
+
+    button {
+      opacity: 1;
+      display: inline-flex;
+    }
+  }
+}
