@@ -87,25 +87,22 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │
-│                         ◇                                           │
-│                      Yishan AI                                      │
+│                        下午好                                        │
 │                                                                     │
-│                  ┌─────────────────────┐                           │
-│                  │  MessageSquare icon  │                           │
-│                  │                     │                           │
-│                  │  "开始一段新对话"     │                           │
-│                  └─────────────────────┘                           │
-│                                                                     │
-│  ┌─ Textarea ─────────────────────────────────────────────────┐  │
-│  │ 输入消息...                                                    │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                     │
-│  [Plan|Build]        [MiniMax-M2.7 ▼]           [发送 ▶]         │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  输入消息...                                             [发送] │  │
+│  │                                                             │  │
+│  │  [Build ▼]        [MiniMax-M2.7-highspeed ▼]               │  │
+│  └─────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-输入即创建：用户输入 → POST `/api/sessions` → `router.push(/chat/${id})` → 自动发送第一条消息。
+特点：
+- 居中显示问候语（上午好/下午好/晚上好）
+- 输入框卡片式设计，带边框和圆角
+- 模式切换和模型选择改为 Select 下拉框
+- 发送按钮在右下角
 
 ## 15.4 输入区详细设计
 
@@ -114,17 +111,17 @@
 │  Textarea (自适应高度，1~6 行)                                    │
 │  输入消息... Shift+Enter 换行                                     │
 └─────────────────────────────────────────────────────────────────┘
-┌──────────────┐                    ┌──────────────┐ ┌──────────┐
-│ ToggleGroup  │                    │   Select     │ │  Button  │
-│ [Plan][Build]│                    │ MiniMax-M2.7▼│ │  发送 ▶  │
-└──────────────┘                    └──────────────┘ └──────────┘
-  左侧：模式切换                       中右：模型选择     右侧：发送
+┌──────────────┐ ┌──────────────┐                        ┌────────┐
+│    Select    │ │    Select    │                        │ Button  │
+│  Build ▼     │ │MiniMax-M2.7▼ │                        │  发送   │
+└──────────────┘ └──────────────┘                        └────────┘
+  左侧：模式切换     中间：模型选择                        右侧：发送
 ```
 
 | 控件 | shadcn 组件 | 行为 |
 |------|------------|------|
-| 模式切换 | `ToggleGroup` + `ToggleGroupItem` | Plan / Build 二选一，默认 Build |
-| 模型选择 | `Select` + `SelectGroup` + `SelectItem` | 从 `/api/models` 加载列表 |
+| 模式切换 | `Select` | Plan / Build 二选一，默认 Build |
+| 模型选择 | `Select` + `SelectGroup` + `SelectItem` | 默认 MiniMax-M2.7-highspeed |
 | 发送按钮 | `Button` | 流式中变为"停止"按钮（`Square` icon） |
 | 输入框 | `Textarea` | 自适应高度，Enter 发送，Shift+Enter 换行 |
 
@@ -159,8 +156,8 @@
 | 消息列表滚动 | `ScrollArea` | 自定义滚动条，自动滚到底部 |
 | 思考过程折叠 | `Collapsible` + `CollapsibleTrigger` + `CollapsibleContent` | 展开/收起 AI 推理链路 |
 | 流式加载骨架 | `Skeleton` | 等待 AI 响应时的占位 |
-| 代码块复制 | `Button` variant="ghost" + `Tooltip` | 代码块右上角复制按钮 |
-| 空状态 | `Empty` | 无会话时的引导页 |
+| 用户消息复制 | `Button` variant="ghost" + CSS hover | 悬浮显示复制按钮，点击后显示"已复制" |
+| 空状态 | 自定义组件 | 无会话时的引导页，居中问候语 + 输入框 |
 
 ### Plan / Build 步骤卡片
 
@@ -275,22 +272,47 @@ components/layout/
 └── AppSidebar.tsx      → 侧边栏内容组件
 
 components/chat/
-├── message-list.tsx        → ScrollArea 封装，自动滚底
+├── message-list.tsx        → ScrollArea 封装，自动滚底，消息气泡样式
 ├── message-item.tsx        → 单条消息渲染（user / assistant）
 ├── message-thinking.tsx    → Collapsible 思考过程折叠卡片
 ├── message-code-block.tsx  → 代码块 + 复制按钮
 ├── plan-card.tsx           → Card 步骤列表，编辑/删除/执行
 ├── plan-step-item.tsx      → 单步骤条目（Badge 状态 + 详情展开）
 ├── build-progress.tsx      → build 逐步执行进度
-├── chat-input.tsx          → Textarea + ToggleGroup + Select + Button 组合
-├── model-selector.tsx      → Select 封装，/api/models 加载
-└── empty-state.tsx         → Empty 空态引导
+├── chat-input.tsx          → 卡片式输入框（Textarea + Select + Button）
+└── empty-state.tsx         → 空态引导（居中问候语 + 输入框）
 
 components/sidebar/
 └── SessionList.tsx         → 侧边栏会话列表
 
 lib/
 └── constants.ts             → 共享常量 (DEFAULT_SESSION_LIMIT)
+```
+
+### 15.8.1 SCSS 样式
+
+`globals.scss` 中定义的用户消息复制按钮样式：
+```scss
+.msg-actions-wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+
+  &:hover .msg-action-btn {
+    opacity: 1;
+  }
+
+  .msg-action-btn {
+    opacity: 0;
+    transition: opacity 200ms;
+    margin-top: 0.25rem;
+
+    button {
+      opacity: 1;
+      display: inline-flex;
+    }
+  }
+}
 ```
 
 ## 15.9 Phase 规划
@@ -313,6 +335,9 @@ lib/
 | 空态引导页 | ✅ | |
 | Toast 通知 | ✅ | |
 | 移动端响应式 | ✅ | |
+| 用户消息复制按钮 | ✅ | |
+| URL 参数规范化 (sessionId) | ✅ | |
+| SCSS 迁移 | ✅ | |
 | 全局搜索 Command+K | | ✅ |
 | 会话置顶 | | ✅ |
 | 追问引导 | | ✅ |
