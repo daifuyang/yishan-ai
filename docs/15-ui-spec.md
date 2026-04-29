@@ -196,7 +196,7 @@
       <SidebarGroup>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={createSession}>
+            <SidebarMenuButton onClick={handleNewChat}>
               <Plus data-icon="inline-start" />
               <span>新建对话</span>
             </SidebarMenuButton>
@@ -436,7 +436,7 @@ components/chat/
 | Shift+Enter 换行 | Textarea 默认行为 |
 | 自动滚底 | 新消息 / 流式 chunk → scrollToBottom |
 | 流式光标 | `animate-pulse` 的 `▌` 字符 |
-| 新建会话 | 点击 `+` → 聚焦输入框 < 300ms |
+| 新建会话 | 点击 `+` → 跳转首页（不创建会话）→ 用户发送消息时才创建会话 |
 | 会话切换 | sidebar 点击 → `router.push` + `fetchMessages()` → 根据 session.status 自动 subscribe |
 | 页面刷新恢复 | 从 URL 取 sessionId → 加载历史 → 如果 status=streaming 自动 subscribe 接续输出 |
 | 重连追赶 | subscribe 先收 `content_catchup`（已缓冲内容）→ 再收实时 delta |

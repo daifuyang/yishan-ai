@@ -1,0 +1,19 @@
+{
+  "name": "yishan-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:frontend": "pnpm --filter @yishan-ai/frontend dev",
+    "dev:backend": "pnpm --filter @yishan-ai/backend dev",
+    "build": "pnpm --filter @yishan-ai/shared build && pnpm --filter @yishan-ai/frontend build && pnpm --filter @yishan-ai/backend build",
+    "start": "pm2 start packages/backend/ecosystem.config.cjs",
+    "dev": "pnpm dev:frontend & pnpm dev:backend"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "devDependencies": {
+    "pm2": "^5.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
