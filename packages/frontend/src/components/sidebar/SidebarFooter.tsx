@@ -22,7 +22,7 @@ export function SidebarFooter() {
           <TooltipTrigger asChild>
             <SidebarMenuButton>
               <Settings data-icon="inline-start" />
-              <span>设置</span>
+              <span className="group-data-[collapsible=icon]:hidden">设置</span>
             </SidebarMenuButton>
           </TooltipTrigger>
           <TooltipContent side="right">设置</TooltipContent>
