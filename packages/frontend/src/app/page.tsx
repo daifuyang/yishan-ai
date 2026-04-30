@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useCallback, useState } from "react";
+import React, { Suspense, useCallback, useState, useTransition } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { ChatLayout } from "@/components/layout/ChatLayout";
@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/chat/empty-state";
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const { sessions, fetchSessions, createSession } = useSessionStore();
   const { messages, isStreaming, streamingContent, fetchMessages, sendMessage, stopStream, clearMessages } = useChatStore();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -42,8 +43,10 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
       setIsCreatingSession(true);
       const newSessionId = await createSession(model);
       await sendMessage(newSessionId, content, model, mode);
-      router.push(`/?sessionId=${newSessionId}`);
       setIsCreatingSession(false);
+      startTransition(() => {
+        router.push(`/?sessionId=${newSessionId}`);
+      });
     } else {
       sendMessage(sessionId, content, model, mode);
     }
@@ -59,41 +62,42 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const hasMessages = messages.length > 0 || isStreaming;
 
   const shouldShowLoading = isLoading || (sessionId && !session);
+  const isCreating = isCreatingSession || isPending;
 
   return (
     <div className="flex flex-col h-screen">
-      {!sessionId && !hasMessages ? (
-        <div className="flex-1 p-4">
-          <EmptyState
-            onSend={handleSend}
-            onStop={handleStop}
+      {hasMessages ? (
+        <div className="flex flex-col h-full">
+          <MessageList
+            messages={messages}
             isStreaming={isStreaming}
-            disabled={isCreatingSession}
-            defaultModel={session?.model}
+            streamingContent={streamingContent}
           />
+          <div className="shrink-0 px-6 pb-6 pt-2">
+            <div className="max-w-3xl mx-auto">
+              <ChatInput
+                onSend={handleSend}
+                onStop={handleStop}
+                isStreaming={isStreaming}
+                disabled={isCreating}
+                defaultModel={session?.model}
+              />
+            </div>
+          </div>
         </div>
       ) : shouldShowLoading ? (
         <div className="flex items-center justify-center h-full">
           <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
         </div>
       ) : (
-        <div className="flex flex-col h-full m-4">
-          <MessageList
-            messages={messages}
+        <div className="flex-1 px-6 py-8">
+          <EmptyState
+            onSend={handleSend}
+            onStop={handleStop}
             isStreaming={isStreaming}
-            streamingContent={streamingContent}
+            disabled={isCreating}
+            defaultModel={session?.model}
           />
-          <div className="shrink-0 px-4 pb-4">
-            <div className="max-w-2xl mx-auto">
-              <ChatInput
-                onSend={handleSend}
-                onStop={handleStop}
-                isStreaming={isStreaming}
-                disabled={isCreatingSession}
-                defaultModel={session?.model}
-              />
-            </div>
-          </div>
         </div>
       )}
     </div>

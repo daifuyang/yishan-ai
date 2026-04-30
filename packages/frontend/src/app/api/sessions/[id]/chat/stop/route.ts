@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4800';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:4800';
 
 export async function POST(
   request: Request,

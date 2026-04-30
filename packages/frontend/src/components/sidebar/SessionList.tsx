@@ -12,6 +12,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuItemIcon,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -108,29 +109,30 @@ function SessionItem({ session }: { session: Session }) {
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[140px]">
-            <DropdownMenuItem className="flex items-center gap-3 text-sm text-foreground outline-none cursor-pointer px-2 py-2 hover:bg-accent" onSelect={(e) => { e.preventDefault(); handleOpenEdit(); }}>
-              <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenEdit(); }}>
+              <DropdownMenuItemIcon>
+                <Pencil className="h-4 w-4 text-muted-foreground" />
+              </DropdownMenuItemIcon>
               编辑标题
             </DropdownMenuItem>
-            <DropdownMenuItem className="flex items-center gap-3 text-sm text-foreground outline-none cursor-pointer px-2 py-2 hover:bg-accent" onSelect={(e) => { e.preventDefault(); handleTogglePin(); }}>
-              {session.isPinned ? (
-                <>
-                  <PinOff className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  取消置顶
-                </>
-              ) : (
-                <>
-                  <Pin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  置顶
-                </>
-              )}
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleTogglePin(); }}>
+              <DropdownMenuItemIcon>
+                {session.isPinned ? (
+                  <PinOff className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Pin className="h-4 w-4 text-muted-foreground" />
+                )}
+              </DropdownMenuItemIcon>
+              {session.isPinned ? "取消置顶" : "置顶"}
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="flex items-center gap-3 text-sm text-red-600 outline-none cursor-pointer px-2 py-2 hover:bg-red-50 dark:hover:bg-red-950"
               onSelect={(e) => { e.preventDefault(); handleOpenDelete(); }}
+              className="text-red-600 focus:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
             >
-              <Trash2 className="h-4 w-4 shrink-0" />
+              <DropdownMenuItemIcon>
+                <Trash2 className="h-4 w-4" />
+              </DropdownMenuItemIcon>
               删除
             </DropdownMenuItem>
           </DropdownMenuContent>

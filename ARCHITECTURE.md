@@ -26,3 +26,5 @@ pnpm build && pm2 start ecosystem.config.cjs
 | 13 | [安全注意事项](docs/13-security.md) | API Key 保护、限流、CORS |
 | 14 | [后续扩展方向](docs/14-roadmap.md) | 多模型、认证、MCP、全文搜索 |
 | 15 | [UI 设计规范](docs/15-ui-spec.md) | 布局、空态、消息流、Kimi 风格参考 |
+| 16 | [MCP & Skills 实现](docs/16-mcp-skills.md) | MCP 协议、Skills 系统、工具调用 |
+| 17 | [问题排查 Runbook](docs/17-troubleshooting.md) | 常见问题诊断、MCP 调试、SSE 流排查 |

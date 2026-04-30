@@ -46,19 +46,19 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, defaultModel 
   const isDisabled = disabled || isStreaming;
 
   return (
-    <div className={noBorder ? 'p-3' : 'border rounded-2xl p-3 shadow-sm'}>
+    <div className={noBorder ? 'p-3' : 'border rounded-2xl p-4 shadow-md glass'}>
       <Textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={isStreaming ? 'AI 正在回复...' : '输入消息...'}
         disabled={isDisabled}
-        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none min-h-[48px] max-h-[120px] mb-2 text-[15px]"
+        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none min-h-[52px] max-h-[120px] mb-3 text-[15px] bg-transparent"
         rows={1}
       />
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <Select value={mode} onValueChange={(v) => setMode(v as 'plan' | 'build')} disabled={isDisabled}>
-          <SelectTrigger className="w-[100px] h-8 text-sm">
+          <SelectTrigger className="w-[90px] h-8 text-sm border-muted-foreground/20">
             <SelectValue placeholder="模式" />
           </SelectTrigger>
           <SelectContent>
@@ -68,7 +68,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, defaultModel 
         </Select>
 
         <Select value={model} onValueChange={setModel} disabled={isDisabled}>
-          <SelectTrigger className="w-[180px] h-8 text-sm">
+          <SelectTrigger className="w-[170px] h-8 text-sm border-muted-foreground/20">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -81,12 +81,12 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, defaultModel 
         <div className="flex-1" />
 
         {isStreaming ? (
-          <Button variant="outline" onClick={onStop} className="h-8">
-            <Square className="w-4 h-4 mr-1" />
+          <Button variant="outline" onClick={onStop} className="h-8 px-3 gap-1.5">
+            <Square className="w-3.5 h-3.5" />
             停止
           </Button>
         ) : (
-          <Button onClick={handleSend} disabled={!content.trim() || isDisabled} className="h-8 px-4">
+          <Button onClick={handleSend} disabled={!content.trim() || isDisabled} className="h-8 px-4 gap-1.5">
             <SendHorizonal className="w-4 h-4" />
           </Button>
         )}

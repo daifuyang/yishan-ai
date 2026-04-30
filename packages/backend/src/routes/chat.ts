@@ -3,6 +3,25 @@ import { z } from 'zod';
 import { getSession, updateSessionStatus, autoTitle } from '../stores/session-store.js';
 import { appendMessage, getAnthropicMessages } from '../stores/message-store.js';
 import { streamHub } from '../lib/stream-hub.js';
+import { getMcpManager, MCPServer, MCPTool } from '../lib/mcp-manager.js';
+
+function generateSystemPrompt(tools: MCPTool[], servers: MCPServer[]): string {
+  const toolList = tools.map(t => `  - ${t.name}: ${t.description}`).join('\n');
+  const serverNames = servers.map(s => s.name).join(', ');
+
+  return `你是一个 AI 助手。当用户询问关于文件操作的问题时，你应该优先使用可用的 MCP 工具来完成。
+
+当前已连接的 MCP 服务器: ${serverNames || '无'}
+
+可用的 MCP 工具：
+${toolList || '无工具可用'}
+
+重要规则：
+1. 当用户询问目录列表、文件内容时，必须使用 list_directory、read_file、read_text_file 等 MCP 工具
+2. 不要返回 shell 命令（如 ls、cat 等）
+3. 直接使用工具获取的信息回答用户问题
+4. 如果工具执行失败，告知用户并尝试其他方式`;
+}
 
 const SendMessageSchema = z.object({
   content: z.union([z.string(), z.array(z.any())]),
@@ -34,7 +53,14 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
 
     const sessionModel = model || session.model;
 
-    streamHub.startWorker(id, messages, { model: sessionModel, systemPrompt: undefined });
+    const mcpManager = getMcpManager();
+    const mcpTools = mcpManager.getAnthropicTools();
+    const connectedServers = mcpManager.getServers().filter(s => s.status === 'connected');
+
+    const systemPrompt = generateSystemPrompt(mcpTools, connectedServers);
+
+    console.error('[CHAT] Starting worker with', { toolsCount: mcpTools.length, systemPromptLength: systemPrompt.length });
+    streamHub.startWorker(id, messages, { model: sessionModel, systemPrompt }, mcpTools);
 
     return { ok: true };
   });
@@ -75,6 +101,16 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
       }
     };
 
+    const handleToolCall = async (data: { tool: string; args: Record<string, unknown> }) => {
+      try {
+        const mcpManager = getMcpManager();
+        const result = await mcpManager.callTool(data.tool, data.args);
+        streamHub.sendToWorker('tool_result', { result });
+      } catch (err: any) {
+        streamHub.sendToWorker('tool_error', { error: err.message });
+      }
+    };
+
     const handleDone = () => {
       reply.raw.write(`data: ${JSON.stringify({ type: 'message_stop' })}\n\n`);
       reply.raw.end();
@@ -94,11 +130,13 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
     streamHub.on('delta', handleDelta);
     streamHub.on('done', handleDone);
     streamHub.on('error', handleError);
+    streamHub.on('tool_call', handleToolCall);
 
     request.raw.on('close', () => {
       streamHub.off('delta', handleDelta);
       streamHub.off('done', handleDone);
       streamHub.off('error', handleError);
+      streamHub.off('tool_call', handleToolCall);
     });
   });
 
