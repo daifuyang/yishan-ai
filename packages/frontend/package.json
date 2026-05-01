@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 4810",
+    "dev": "node dev-server.js",
     "build": "next build",
     "start": "next start --port 4810"
   },
   "dependencies": {
+    "http-proxy": "^1.18.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-collapsible": "^1.1.12",

@@ -10,7 +10,7 @@ pnpm dev:frontend
 pnpm dev:backend
 ```
 
-开发环境前端 `:4810` 代理 API 请求到 `:4820`。
+开发环境前端 `:4810` 通过 http-proxy 代理 API 请求到 `:4800`，避免 CORS 问题。
 
 ## 12.2 生产构建
 

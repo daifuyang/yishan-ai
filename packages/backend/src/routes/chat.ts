@@ -1,9 +1,8 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { getSession, updateSessionStatus, autoTitle } from '../stores/session-store.js';
-import { appendMessage, getAnthropicMessages } from '../stores/message-store.js';
+import { getSession } from '../stores/session-store.js';
 import { streamHub } from '../lib/stream-hub.js';
-import { getMcpManager, MCPServer, MCPTool } from '../lib/mcp-manager.js';
+import { getMcpManager, MCPTool, MCPServer } from '../lib/mcp-manager.js';
 
 function generateSystemPrompt(tools: MCPTool[], servers: MCPServer[]): string {
   const toolList = tools.map(t => `  - ${t.name}: ${t.description}`).join('\n');
@@ -40,29 +39,19 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'Session not found' });
     }
 
-    const userContent = typeof content === 'string' ? content : JSON.stringify(content);
-    appendMessage(id, 'user', typeof content === 'string' ? content : content);
-    autoTitle(id, userContent);
-    updateSessionStatus(id, 'streaming', '');
-
-    const anthropicMessages = getAnthropicMessages(id);
-    const messages = anthropicMessages.map((m: any) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }));
-
-    const sessionModel = model || session.model;
-
     const mcpManager = getMcpManager();
     const mcpTools = mcpManager.getAnthropicTools();
-    const connectedServers = mcpManager.getServers().filter(s => s.status === 'connected');
-
+    const connectedServers = mcpManager.getServers().filter((s: MCPServer) => s.status === 'connected');
     const systemPrompt = generateSystemPrompt(mcpTools, connectedServers);
 
-    console.error('[CHAT] Starting worker with', { toolsCount: mcpTools.length, systemPromptLength: systemPrompt.length });
-    streamHub.startWorker(id, messages, { model: sessionModel, systemPrompt }, mcpTools);
+    const messageId = streamHub.start({
+      sessionId: id,
+      userMessage: typeof content === 'string' ? content : JSON.stringify(content),
+      options: { model: model || session.model, systemPrompt },
+      tools: mcpTools,
+    });
 
-    return { ok: true };
+    return { ok: true, messageId };
   });
 
   fastify.get('/api/sessions/:id/chat/subscribe', async (request: any, reply: any) => {
@@ -79,89 +68,21 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
       'Connection': 'keep-alive',
     });
 
-    if (session.status === 'idle') {
-      reply.raw.write(`data: ${JSON.stringify({ type: 'message_stop' })}\n\n`);
-      reply.raw.end();
-      return;
-    }
-
-    if (session.status === 'failed') {
-      reply.raw.write(`data: ${JSON.stringify({ type: 'error', message: 'Session failed' })}\n\n`);
-      reply.raw.end();
-      return;
-    }
-
-    if (session.streamingContent) {
-      reply.raw.write(`data: ${JSON.stringify({ type: 'content_catchup', content: session.streamingContent })}\n\n`);
-    }
-
-    const handleDelta = (data: any) => {
-      if (data.delta?.type === 'text_delta') {
-        reply.raw.write(`data: ${JSON.stringify({ type: 'content_block_delta', delta: data.delta })}\n\n`);
-      }
-    };
-
-    const handleToolCall = async (data: { tool: string; args: Record<string, unknown> }) => {
-      try {
-        const mcpManager = getMcpManager();
-        const result = await mcpManager.callTool(data.tool, data.args);
-        streamHub.sendToWorker('tool_result', { result });
-      } catch (err: any) {
-        streamHub.sendToWorker('tool_error', { error: err.message });
-      }
-    };
-
-    const handleDone = () => {
-      reply.raw.write(`data: ${JSON.stringify({ type: 'message_stop' })}\n\n`);
-      reply.raw.end();
-      streamHub.off('delta', handleDelta);
-      streamHub.off('done', handleDone);
-      streamHub.off('error', handleError);
-    };
-
-    const handleError = (data: any) => {
-      reply.raw.write(`data: ${JSON.stringify({ type: 'error', message: data.message })}\n\n`);
-      reply.raw.end();
-      streamHub.off('delta', handleDelta);
-      streamHub.off('done', handleDone);
-      streamHub.off('error', handleError);
-    };
-
-    streamHub.on('delta', handleDelta);
-    streamHub.on('done', handleDone);
-    streamHub.on('error', handleError);
-    streamHub.on('tool_call', handleToolCall);
+    const { cleanup } = streamHub.pipeToSSE(reply, getMcpManager());
 
     request.raw.on('close', () => {
-      streamHub.off('delta', handleDelta);
-      streamHub.off('done', handleDone);
-      streamHub.off('error', handleError);
-      streamHub.off('tool_call', handleToolCall);
+      cleanup();
     });
   });
 
   fastify.post('/api/sessions/:id/chat/stop', async (request: any, reply: any) => {
-    const { id } = request.params;
-    const session = getSession(id);
-
-    if (!session) {
-      return reply.code(404).send({ error: 'Session not found' });
-    }
-
-    const stopped = streamHub.stopWorker();
-
-    if (session.streamingContent) {
-      appendMessage(id, 'assistant', [{ type: 'text', text: session.streamingContent }]);
-    }
-
-    updateSessionStatus(id, 'idle', null);
-
+    const stopped = streamHub.stop();
     return { ok: true, aborted: stopped };
   });
 
   fastify.addHook('onClose', async () => {
     if (streamHub.isRunning()) {
-      streamHub.stopWorker();
+      streamHub.stop();
     }
   });
 };

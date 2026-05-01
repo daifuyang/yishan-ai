@@ -1,34 +1,40 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { SendHorizonal, Square } from 'lucide-react';
+import { AVAILABLE_MODELS, type ChatMode } from '@/lib/constants';
 
 interface ChatInputProps {
-  onSend: (content: string, model: string, mode: 'plan' | 'build') => void;
+  onSend: (content: string, model: string, mode: ChatMode) => void;
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
   defaultModel?: string;
-  models?: { id: string; name: string }[];
   noBorder?: boolean;
+  initialContent?: string;
 }
 
-const DEFAULT_MODELS = [
-  { id: 'MiniMax-M2.7', name: 'MiniMax-M2.7' },
-  { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax-M2.7-highspeed' },
-  { id: 'MiniMax-M2.5', name: 'MiniMax-M2.5' },
-  { id: 'MiniMax-M2.5-highspeed', name: 'MiniMax-M2.5-highspeed' },
-  { id: 'MiniMax-M2.1', name: 'MiniMax-M2.1' },
-  { id: 'MiniMax-M2.1-highspeed', name: 'MiniMax-M2.1-highspeed' },
-];
+export function ChatInput({
+  onSend,
+  onStop,
+  isStreaming,
+  disabled,
+  defaultModel = 'MiniMax-M2.7-highspeed',
+  noBorder,
+  initialContent,
+}: ChatInputProps) {
+  const [content, setContent] = useState(initialContent || '');
+  const [model, setModel] = useState(() => defaultModel);
+  const [mode, setMode] = useState<ChatMode>('build');
 
-export function ChatInput({ onSend, onStop, isStreaming, disabled, defaultModel = 'MiniMax-M2.7-highspeed', models = DEFAULT_MODELS, noBorder }: ChatInputProps) {
-  const [content, setContent] = useState('');
-  const [model, setModel] = useState(() => defaultModel || 'MiniMax-M2.7-highspeed');
-  const [mode, setMode] = useState<'plan' | 'build'>('build');
+  useEffect(() => {
+    if (initialContent !== undefined) {
+      setContent(initialContent);
+    }
+  }, [initialContent]);
 
   const handleSend = useCallback(() => {
     if (!content.trim() || disabled || isStreaming) return;
@@ -57,7 +63,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, defaultModel 
         rows={1}
       />
       <div className="flex items-center gap-2">
-        <Select value={mode} onValueChange={(v) => setMode(v as 'plan' | 'build')} disabled={isDisabled}>
+        <Select value={mode} onValueChange={(v) => setMode(v as ChatMode)} disabled={isDisabled}>
           <SelectTrigger className="w-[90px] h-8 text-sm border-muted-foreground/20">
             <SelectValue placeholder="模式" />
           </SelectTrigger>
@@ -72,7 +78,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, defaultModel 
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {models.map((m) => (
+            {AVAILABLE_MODELS.map((m) => (
               <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
             ))}
           </SelectContent>

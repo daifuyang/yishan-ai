@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useCallback, useState, useTransition } from "react";
+import React, { Suspense, useCallback, useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { ChatLayout } from "@/components/layout/ChatLayout";
@@ -15,9 +15,10 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { sessions, fetchSessions, createSession } = useSessionStore();
-  const { messages, isStreaming, streamingContent, fetchMessages, sendMessage, stopStream, clearMessages } = useChatStore();
+  const { messages, isStreaming, streamingContent, activeToolCalls, fetchMessages, sendMessage, stopStream, clearMessages, rollbackMessage } = useChatStore();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [rollbackContent, setRollbackContent] = useState<string | undefined>();
 
   React.useEffect(() => {
     fetchSessions();
@@ -39,6 +40,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   }, [sessionId, fetchMessages, clearMessages, router]);
 
   const handleSend = useCallback(async (content: string, model: string, mode: "plan" | "build") => {
+    setRollbackContent(undefined);
     if (!sessionId) {
       setIsCreatingSession(true);
       const newSessionId = await createSession(model);
@@ -58,6 +60,12 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     }
   }, [sessionId, stopStream]);
 
+  const handleRollback = useCallback(async (messageId: string, content: string) => {
+    if (!sessionId) return;
+    await rollbackMessage(sessionId, messageId);
+    setRollbackContent(content);
+  }, [sessionId, rollbackMessage]);
+
   const session = sessions.find((s) => s.id === sessionId);
   const hasMessages = messages.length > 0 || isStreaming;
 
@@ -72,6 +80,8 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
             messages={messages}
             isStreaming={isStreaming}
             streamingContent={streamingContent}
+            activeToolCalls={activeToolCalls}
+            onRollback={handleRollback}
           />
           <div className="shrink-0 px-6 pb-6 pt-2">
             <div className="max-w-3xl mx-auto">
@@ -81,6 +91,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
                 isStreaming={isStreaming}
                 disabled={isCreating}
                 defaultModel={session?.model}
+                initialContent={rollbackContent}
               />
             </div>
           </div>

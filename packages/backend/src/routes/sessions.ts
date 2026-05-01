@@ -8,7 +8,7 @@ import {
   updateSessionPin,
   deleteSession,
 } from '../stores/session-store.js';
-import { getMessages } from '../stores/message-store.js';
+import { getMessages, softDeleteMessagesAfter, restoreMessages } from '../stores/message-store.js';
 
 const CreateSessionSchema = z.object({
   model: z.string(),
@@ -56,6 +56,29 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params;
     deleteSession(id);
     return { ok: true };
+  });
+
+  fastify.delete('/api/sessions/:id/messages', async (request: any) => {
+    const { id } = request.params;
+    const { from, restore } = request.query;
+
+    if (!from) {
+      return { error: 'Missing "from" query parameter' };
+    }
+
+    const session = getSession(id);
+    if (!session) {
+      return { error: 'Session not found' };
+    }
+
+    if (restore === 'true') {
+      restoreMessages(id, from);
+    } else {
+      softDeleteMessagesAfter(id, from);
+    }
+
+    const messages = getMessages(id);
+    return { messages };
   });
 };
 

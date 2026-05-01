@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
 import { ChatInput } from './chat-input';
+import { type ChatMode } from '@/lib/constants';
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -11,7 +11,7 @@ function getGreeting() {
 }
 
 interface EmptyStateProps {
-  onSend: (content: string, model: string, mode: 'plan' | 'build') => void;
+  onSend: (content: string, model: string, mode: ChatMode) => void;
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
