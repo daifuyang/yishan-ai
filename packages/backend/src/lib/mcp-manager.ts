@@ -6,6 +6,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
+function mcpLog(level: 'INFO' | 'WARN' | 'ERROR', message: string, meta?: Record<string, unknown>) {
+  if (!isDev) return;
+  const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+  console.log(`[${timestamp}] [MCP] [${level}] ${message}${metaStr}`);
+}
+
 export interface MCPConfig {
   command?: string;
   args?: string[];
@@ -66,7 +75,7 @@ export class McpManager extends EventEmitter {
 
       return Array.from(this.servers.values());
     } catch (err) {
-      console.error('Failed to load MCP config:', err);
+      mcpLog('ERROR', 'Failed to load MCP config', { error: String(err) });
       return [];
     }
   }
@@ -95,9 +104,11 @@ export class McpManager extends EventEmitter {
     }
 
     if (this.connections.has(name)) {
+      mcpLog('INFO', `Using existing connection for ${name}`);
       return this.connections.get(name)!.tools;
     }
 
+    mcpLog('INFO', `Connecting to MCP server: ${name}`);
     server.status = 'connecting';
     this.emit('serverChanged', this.getServers());
     this.emit('serverStatusChanged', { name, status: 'connecting' });
@@ -107,8 +118,10 @@ export class McpManager extends EventEmitter {
       const config = server.config;
 
       if (config.url) {
+        mcpLog('INFO', `Using SSE transport for ${name}`, { url: config.url });
         transport = new SSEClientTransport(new URL(config.url));
       } else if (config.command) {
+        mcpLog('INFO', `Using stdio transport for ${name}`, { command: config.command, args: config.args });
         const env: Record<string, string> = {};
         for (const [k, v] of Object.entries(process.env)) {
           if (v !== undefined) env[k] = v;
@@ -146,11 +159,14 @@ export class McpManager extends EventEmitter {
       server.tools = mcpTools;
       server.error = undefined;
 
+      mcpLog('INFO', `Successfully connected to ${name}`, { toolCount: mcpTools.length });
+
       this.emit('serverChanged', this.getServers());
       this.emit('serverStatusChanged', { name, status: 'connected' });
 
       return mcpTools;
     } catch (err: any) {
+      mcpLog('ERROR', `Failed to connect to ${name}`, { error: err.message });
       server.status = 'error';
       server.error = err.message;
       this.emit('serverChanged', this.getServers());
@@ -200,16 +216,27 @@ export class McpManager extends EventEmitter {
   }
 
   async callTool(toolName: string, args: Record<string, any>): Promise<any> {
-    for (const [, conn] of this.connections) {
+    const startTime = Date.now();
+    for (const [serverName, conn] of this.connections) {
       const tool = conn.tools.find(t => t.name === toolName);
       if (tool) {
-        const result = await conn.client.callTool({
-          name: toolName,
-          arguments: args,
-        });
-        return result;
+        mcpLog('INFO', `Calling tool ${toolName} on server ${serverName}`, { argsKeys: Object.keys(args) });
+        try {
+          const result = await conn.client.callTool({
+            name: toolName,
+            arguments: args,
+          });
+          const duration = Date.now() - startTime;
+          mcpLog('INFO', `Tool ${toolName} completed`, { serverName, duration, resultLength: String(result).length });
+          return result;
+        } catch (err: any) {
+          const duration = Date.now() - startTime;
+          mcpLog('ERROR', `Tool ${toolName} failed`, { serverName, duration, error: err.message });
+          throw err;
+        }
       }
     }
+    mcpLog('WARN', `Tool "${toolName}" not found in any connected server`);
     throw new Error(`Tool "${toolName}" not found`);
   }
 

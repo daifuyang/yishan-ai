@@ -1,4 +1,21 @@
 import { getDb } from '../db/index.js';
+import { getLogger } from '../lib/logger.js';
+
+const isDev = process.env.NODE_ENV !== 'production';
+
+function storeLog(sessionId: string | null, level: 'DEBUG' | 'INFO', message: string, meta?: Record<string, unknown>) {
+  if (!isDev) return;
+  if (sessionId) {
+    const log = getLogger(sessionId);
+    if (log) {
+      if (level === 'DEBUG') {
+        log.debug('STORE', message, meta);
+      } else {
+        log.info('STORE', message, meta);
+      }
+    }
+  }
+}
 
 export interface Session {
   id: string;
@@ -43,6 +60,7 @@ export function createSession(model: string, title?: string): Session {
     INSERT INTO sessions (id, title, model, is_pinned, created_at, updated_at)
     VALUES (?, ?, ?, 0, ?, ?)
   `).run(id, title || '新对话', model, now, now);
+  storeLog(id, 'DEBUG', 'Session created', { title: title || '新对话', model });
   return { id, title: title || '新对话', model, status: 'idle', isPinned: false, createdAt: now, updatedAt: now };
 }
 
@@ -50,6 +68,7 @@ export function updateSessionTitle(id: string, title: string): void {
   const db = getDb();
   db.prepare('UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?')
     .run(title, Date.now(), id);
+  storeLog(id, 'DEBUG', 'Session title updated', { title });
 }
 
 export function updateSessionPin(id: string, isPinned: boolean): void {
@@ -61,6 +80,7 @@ export function updateSessionPin(id: string, isPinned: boolean): void {
 export function deleteSession(id: string): void {
   const db = getDb();
   db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+  storeLog(id, 'DEBUG', 'Session deleted');
 }
 
 export function updateSessionStatus(
@@ -72,6 +92,7 @@ export function updateSessionStatus(
   db.prepare(
     'UPDATE sessions SET status = ?, streaming_content = ?, updated_at = ? WHERE id = ?'
   ).run(status, streamingContent ?? null, Date.now(), id);
+  storeLog(id, 'DEBUG', 'Session status updated', { status, streamingContentLength: streamingContent?.length });
 }
 
 export function appendStreamingContent(id: string, chunk: string): void {

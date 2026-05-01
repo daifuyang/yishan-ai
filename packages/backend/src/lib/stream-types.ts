@@ -11,6 +11,7 @@ export interface StreamOptions {
   model?: string;
   maxTokens?: number;
   systemPrompt?: string;
+  correlationId?: string;
 }
 
 export interface StartParams {

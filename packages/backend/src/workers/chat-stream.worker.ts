@@ -1,5 +1,5 @@
 import { Anthropic } from '@anthropic-ai/sdk';
-import { appendStreamingContent, updateSessionStatus } from '../stores/session-store.js';
+import { appendStreamingContent, updateSessionStatus, getSession } from '../stores/session-store.js';
 import { appendMessage } from '../stores/message-store.js';
 
 let sessionId: string;
@@ -8,9 +8,31 @@ let options: {
   model?: string;
   maxTokens?: number;
   systemPrompt?: string;
+  correlationId?: string;
 };
 let tools: any[] = [];
 let pendingToolCall: { name: string; input: string; id: string } | null = null;
+let completedToolCalls: { id: string; name: string; input: Record<string, unknown>; output?: unknown; error?: string }[] = [];
+let isStopping = false;
+
+function log(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', message: string, meta?: Record<string, unknown>) {
+  process.send?.({ type: 'log', data: { level, message, meta: meta || {} } });
+}
+
+function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const sensitiveFields = ['apiKey', 'token', 'password', 'authorization', 'secret', 'MINIMAX_API_KEY', 'path', 'file_path'];
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (sensitiveFields.some(f => key.toLowerCase().includes(f.toLowerCase()))) {
+      sanitized[key] = '***';
+    } else if (typeof value === 'string' && value.length > 200) {
+      sanitized[key] = value.slice(0, 200) + '...';
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
 
 process.on('message', async (msg: { type: string; data?: any }) => {
   if (msg.type === 'init') {
@@ -18,18 +40,26 @@ process.on('message', async (msg: { type: string; data?: any }) => {
     messages = msg.data.messages;
     options = msg.data.options || {};
     tools = msg.data.tools || [];
+    isStopping = false;
 
-    // Use process.send to send debug message back to parent
-    process.send?.({ type: 'debug', data: { message: 'worker_init', sessionId, toolsCount: tools.length } });
+    log('INFO', 'Worker initialized', {
+      sessionId,
+      toolCount: tools.length,
+      messageCount: messages.length,
+      model: options.model,
+      correlationId: options.correlationId,
+    });
 
     await run();
   } else if (msg.type === 'tool_result') {
-    console.error('[WORKER] tool_result received');
-    // Received tool execution result from main process
+    log('DEBUG', 'Received tool_result from parent');
     handleToolResult(msg.data.result);
   } else if (msg.type === 'tool_error') {
-    console.error('[WORKER] tool_error:', msg.data.error);
+    log('WARN', 'Received tool_error from parent', { error: msg.data.error });
     handleToolError(msg.data.error);
+  } else if (msg.type === 'stop') {
+    log('INFO', 'Received stop signal');
+    isStopping = true;
   }
 });
 
@@ -38,6 +68,22 @@ function finalizeToolCall(content: string) {
 
   const { name, id, input } = pendingToolCall;
   pendingToolCall = null;
+
+  const toolCallRecord = {
+    id,
+    name,
+    input: JSON.parse(input),
+    output: content.startsWith('Error:') ? undefined : content,
+    error: content.startsWith('Error:') ? content : undefined,
+  };
+  completedToolCalls.push(toolCallRecord);
+
+  log('DEBUG', 'Finalizing tool call', {
+    toolId: id,
+    toolName: name,
+    isError: content.startsWith('Error:'),
+    outputPreview: content.slice(0, 200),
+  });
 
   messages.push({
     role: 'assistant',
@@ -62,11 +108,28 @@ function finalizeToolCall(content: string) {
 }
 
 function handleToolResult(result: any) {
-  finalizeToolCall(typeof result === 'string' ? result : JSON.stringify(result));
+  const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+  log('DEBUG', 'Handling tool result', { resultLength: resultStr.length });
+  finalizeToolCall(resultStr);
 }
 
 function handleToolError(error: string) {
+  log('DEBUG', 'Handling tool error', { error });
   finalizeToolCall(`Error: ${error}`);
+}
+
+function handleStop() {
+  log('INFO', 'Handling stop, finalizing stream');
+
+  const session = getSession(sessionId);
+  const streamingContent = session?.streamingContent || '';
+
+  if (streamingContent) {
+    appendMessage(sessionId, 'assistant', [{ type: 'text', text: streamingContent }], undefined, completedToolCalls);
+  }
+  updateSessionStatus(sessionId, 'idle', null);
+  process.send?.({ type: 'done' });
+  process.exit(0);
 }
 
 async function run() {
@@ -81,22 +144,45 @@ async function makeApiCall() {
 
   let fullContent = '';
 
-  try {
-    process.send?.({ type: 'debug', data: { message: 'makeApiCall_start', toolsCount: tools.length, tools: JSON.stringify(tools).slice(0, 500) } });
+  const model = options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7';
+  const maxTokens = options.maxTokens || 4096;
+  const temperature = 1;
+  const systemPrompt = options.systemPrompt || '';
 
+  log('INFO', 'API request', {
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    systemPromptLength: systemPrompt.length,
+    systemPromptPreview: systemPrompt.slice(0, 300),
+    messageCount: messages.length,
+    messages: messages.map(m => ({
+      role: m.role,
+      contentType: typeof m.content === 'string' ? 'text' : 'array',
+      contentLength: typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length,
+    })),
+    toolCount: tools.length,
+    tools: tools.map(t => ({ name: t.name, description: t.description?.slice(0, 100) })),
+  });
+
+  try {
     const stream = client.messages.stream({
-      model: options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7',
-      max_tokens: options.maxTokens || 4096,
-      temperature: 1,
-      system: options.systemPrompt,
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
       messages,
       tools,
     });
 
-    process.send?.({ type: 'debug', data: { message: 'makeApiCall_stream_created' } });
+    log('DEBUG', 'API stream created, starting to process events');
 
     for await (const event of stream) {
-      console.error('[DEBUG] event type:', event.type, (event as any).content_block?.type || (event as any).delta?.type);
+      if (isStopping) {
+        log('DEBUG', 'Stop flag set, breaking from stream loop');
+        handleStop();
+        return;
+      }
 
       if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
@@ -104,47 +190,59 @@ async function makeApiCall() {
           appendStreamingContent(sessionId, event.delta.text);
           process.send?.({ type: 'delta', data: event });
         } else if (event.delta.type === 'input_json_delta') {
-          // Accumulate JSON for tool arguments
-          console.error('[DEBUG] tool input_json_delta:', event.delta.partial_json);
           if (pendingToolCall) {
             pendingToolCall.input += (event.delta as any).partial_json;
           }
         }
       } else if (event.type === 'content_block_start') {
-        console.error('[DEBUG] content_block_start type:', (event as any).content_block?.type);
         if ((event as any).content_block?.type === 'tool_use') {
           const block = (event as any).content_block;
-          console.error('[DEBUG] tool_use detected:', block?.name, 'id:', block?.id);
           pendingToolCall = {
             name: block?.name,
             id: block?.id,
             input: '',
           };
+          log('DEBUG', 'Started tool_use block', { toolName: block?.name, toolId: block?.id });
         }
       } else if (event.type === 'content_block_stop') {
         if (pendingToolCall && pendingToolCall.input) {
-          console.error('[DEBUG] sending tool_call:', pendingToolCall.name, pendingToolCall.input);
-          process.send?.({ type: 'tool_call', data: { tool: pendingToolCall.name, args: JSON.parse(pendingToolCall.input) } });
+          try {
+            const args = JSON.parse(pendingToolCall.input);
+            const sanitizedArgs = sanitizeArgs(args);
+            log('INFO', 'Emitting tool_call to parent', {
+              toolName: pendingToolCall.name,
+              toolId: pendingToolCall.id,
+              args: sanitizedArgs,
+            });
+            process.send?.({ type: 'tool_call', data: { tool: pendingToolCall.name, args } });
+          } catch (e) {
+            log('ERROR', 'Failed to parse tool input JSON', { error: String(e), input: pendingToolCall.input.slice(0, 200) });
+          }
         }
-      } else if (event.type === 'message_delta') {
-        // End of message
       }
     }
 
-    console.error('[DEBUG] stream ended, pendingToolCall:', pendingToolCall);
+    if (isStopping) {
+      handleStop();
+      return;
+    }
 
-    // If we had a tool call, the result will come via IPC
-    // If we didn't have a tool call (pendingToolCall is null), we have the final response
     if (!pendingToolCall) {
+      log('INFO', 'Stream completed normally', {
+        fullContentLength: fullContent.length,
+        fullContentPreview: fullContent.slice(0, 500),
+        totalMessages: messages.length,
+        toolCallsCount: completedToolCalls.length,
+      });
+
       if (fullContent || messages.length > 0) {
-        appendMessage(sessionId, 'assistant', [{ type: 'text', text: fullContent }]);
+        appendMessage(sessionId, 'assistant', [{ type: 'text', text: fullContent }], undefined, completedToolCalls);
       }
       updateSessionStatus(sessionId, 'idle', null);
       process.send?.({ type: 'done' });
     }
-    // If pendingToolCall is not null, we'll handle it when the result comes back
   } catch (err) {
-    console.error('Stream error:', err);
+    log('ERROR', 'API stream error', { error: String(err), errorName: (err as Error).name });
     updateSessionStatus(sessionId, 'failed');
     process.send?.({ type: 'error', data: { message: String(err) } });
   }
@@ -158,32 +256,65 @@ async function makeFollowUpCall() {
 
   let fullContent = '';
 
+  const model = options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7';
+  const maxTokens = options.maxTokens || 4096;
+  const temperature = 1;
+  const systemPrompt = options.systemPrompt || '';
+
+  log('INFO', 'API follow-up request', {
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    systemPromptLength: systemPrompt.length,
+    systemPromptPreview: systemPrompt.slice(0, 300),
+    messageCount: messages.length,
+    messages: messages.map(m => ({
+      role: m.role,
+      contentType: typeof m.content === 'string' ? 'text' : 'array',
+      contentLength: typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length,
+    })),
+    toolCount: tools.length,
+    tools: tools.map(t => ({ name: t.name, description: t.description?.slice(0, 100) })),
+  });
+
   try {
-    console.error('[DEBUG] makeFollowUpCall started, messages count:', messages.length);
     const stream = client.messages.stream({
-      model: options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7',
-      max_tokens: options.maxTokens || 4096,
-      temperature: 1,
-      system: options.systemPrompt,
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
       messages,
       tools,
     });
 
     for await (const event of stream) {
+      if (isStopping) {
+        handleStop();
+        return;
+      }
+
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         fullContent += event.delta.text;
         appendStreamingContent(sessionId, event.delta.text);
         process.send?.({ type: 'delta', data: event });
-      } else if (event.type === 'content_block_start') {
-        process.send?.({ type: 'content_block_start', data: event.content_block });
       }
     }
 
-    appendMessage(sessionId, 'assistant', [{ type: 'text', text: fullContent }]);
+    if (isStopping) {
+      handleStop();
+      return;
+    }
+
+    log('INFO', 'Follow-up stream completed', {
+      fullContentLength: fullContent.length,
+      fullContentPreview: fullContent.slice(0, 500),
+    });
+
+    appendMessage(sessionId, 'assistant', [{ type: 'text', text: fullContent }], undefined, completedToolCalls);
     updateSessionStatus(sessionId, 'idle', null);
     process.send?.({ type: 'done' });
   } catch (err) {
-    console.error('Follow-up call error:', err);
+    log('ERROR', 'Follow-up call error', { error: String(err), errorName: (err as Error).name });
     updateSessionStatus(sessionId, 'failed');
     process.send?.({ type: 'error', data: { message: String(err) } });
   }

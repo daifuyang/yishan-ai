@@ -1,4 +1,21 @@
 import { getDb } from '../db/index.js';
+import { getLogger } from '../lib/logger.js';
+
+const isDev = process.env.NODE_ENV !== 'production';
+
+function storeLog(sessionId: string | null, level: 'DEBUG' | 'INFO', message: string, meta?: Record<string, unknown>) {
+  if (!isDev) return;
+  if (sessionId) {
+    const log = getLogger(sessionId);
+    if (log) {
+      if (level === 'DEBUG') {
+        log.debug('MSG_STORE', message, meta);
+      } else {
+        log.info('MSG_STORE', message, meta);
+      }
+    }
+  }
+}
 
 export interface StoredMessage {
   id: string;
@@ -50,6 +67,13 @@ export function appendMessage(
 
   db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(now, sessionId);
 
+  storeLog(sessionId, 'DEBUG', 'Message appended', {
+    messageId: id.slice(0, 8),
+    role,
+    contentLength: typeof content === 'string' ? content.length : JSON.stringify(content).length,
+    toolCallCount: toolCalls?.length || 0,
+  });
+
   return { id, sessionId, role, content, toolCalls, createdAt: now, usageInput: usage?.inputTokens, usageOutput: usage?.outputTokens };
 }
 
@@ -67,6 +91,7 @@ export function rewriteMessages(sessionId: string, messages: { role: string; con
     db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(Date.now(), sessionId);
   });
   tx();
+  storeLog(sessionId, 'DEBUG', 'Messages rewritten', { messageCount: messages.length });
 }
 
 export function getAnthropicMessages(sessionId: string): { role: string; content: any }[] {
@@ -92,6 +117,7 @@ export function softDeleteMessagesAfter(sessionId: string, messageId: string): v
   `).run(now, sessionId, msgRow.created_at);
 
   db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(now, sessionId);
+  storeLog(sessionId, 'DEBUG', 'Messages soft deleted after', { messageId: messageId.slice(0, 8) });
 }
 
 export function restoreMessages(sessionId: string, messageId: string): void {
@@ -106,4 +132,5 @@ export function restoreMessages(sessionId: string, messageId: string): void {
   db.prepare(`
     UPDATE messages SET deleted_at = NULL WHERE session_id = ? AND created_at >= ? AND deleted_at IS NOT NULL
   `).run(sessionId, msgRow.created_at);
+  storeLog(sessionId, 'DEBUG', 'Messages restored', { messageId: messageId.slice(0, 8) });
 }
