@@ -276,6 +276,13 @@ export class SkillManager {
     const file = skill.files.find(f => f.path === filePath);
     return file?.contents || null;
   }
+
+  async getEnabledSkills(): Promise<Skill[]> {
+    if (this.skills.size === 0) {
+      await this.scanSkills();
+    }
+    return Array.from(this.skills.values()).filter(s => s.enabled);
+  }
 }
 
 let skillManager: SkillManager | null = null;
