@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Settings, ChevronRight } from "lucide-react";
+import { Bot, Settings, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -12,6 +12,12 @@ const navItems = [
     label: "MCP",
     icon: Bot,
     href: "/settings/mcp",
+  },
+  {
+    id: "skills",
+    label: "Skills",
+    icon: Sparkles,
+    href: "/settings/skills",
   },
   {
     id: "general",
@@ -58,6 +64,7 @@ export default function SettingsLayout({
 
   const getPageTitle = () => {
     if (pathname === "/settings/mcp") return "MCP 服务器";
+    if (pathname === "/settings/skills") return "Skills";
     if (pathname === "/settings/general") return "通用设置";
     return "设置";
   };
