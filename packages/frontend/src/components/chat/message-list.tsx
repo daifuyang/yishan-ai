@@ -144,7 +144,7 @@ function UserBubble({
 }) {
   return (
     <div className="msg-actions-wrapper">
-      <div className="px-5 py-3 rounded bg-primary text-primary-foreground shadow-sm">
+      <div className="px-5 py-2 rounded bg-primary text-primary-foreground shadow-sm">
         <p className="text-[15px] leading-relaxed">{message.content}</p>
       </div>
       <div className="msg-action-btn">
