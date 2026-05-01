@@ -143,25 +143,23 @@ function UserBubble({
   onRollback?: (messageId: string, content: string) => void;
 }) {
   return (
-    <div className="msg-actions-wrapper">
+    <div className="msg-actions-wrapper align-end">
       <div className="px-3 py-1.5 rounded bg-primary text-primary-foreground shadow-sm w-fit">
         <p className="text-[15px] leading-relaxed">{message.content}</p>
       </div>
-      <div className="msg-action-btn">
-        <div className="flex gap-1 mt-1">
-          {onRollback && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground gap-1 [&_svg]:size-3"
-              onClick={() => onRollback(message.id, message.content)}
-            >
-              <RotateCcw />
-              回退
-            </Button>
-          )}
-          <CopyButton content={message.content} id={message.id} copiedId={copiedId} onCopy={onCopy} />
-        </div>
+      <div className="msg-action-btn flex gap-1 mt-1">
+        {onRollback && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground gap-1 [&_svg]:size-3"
+            onClick={() => onRollback(message.id, message.content)}
+          >
+            <RotateCcw />
+            回退
+          </Button>
+        )}
+        <CopyButton content={message.content} id={message.id} copiedId={copiedId} onCopy={onCopy} />
       </div>
     </div>
   );
@@ -179,7 +177,7 @@ function BotAvatar() {
 
 function StreamingIndicator() {
   return (
-    <div className="bg-card h-10 mt-0 flex items-center justify-center">
+    <div className="bg-card h-10 mt-0 flex items-center justify-start">
       <div className="flex gap-1.5">
         <Skeleton className="h-2 w-2 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
         <Skeleton className="h-2 w-2 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />

@@ -29,4 +29,15 @@ export function runMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_sessions_updated
       ON sessions(updated_at DESC);
   `);
+
+  const columns = db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
+  const hasToolCalls = columns.some(col => col.name === 'tool_calls');
+  if (!hasToolCalls) {
+    db.exec("ALTER TABLE messages ADD COLUMN tool_calls TEXT");
+  }
+
+  const hasDeletedAt = columns.some(col => col.name === 'deleted_at');
+  if (!hasDeletedAt) {
+    db.exec("ALTER TABLE messages ADD COLUMN deleted_at INTEGER");
+  }
 }

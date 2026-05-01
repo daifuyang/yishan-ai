@@ -68,8 +68,8 @@ function HistoryContent() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="flex items-center gap-3 px-6 py-3 border-b max-w-2xl mx-auto w-full">
+    <div className="flex flex-col h-full">
+      <header className="flex items-center gap-3 px-6 py-4">
         <Button variant="ghost" size="sm" onClick={handleBack} className="h-8 w-8 p-0">
           <ArrowLeft className="w-4 h-4" />
         </Button>
@@ -79,7 +79,7 @@ function HistoryContent() {
         </span>
       </header>
 
-      <div className="px-6 py-3 border-b max-w-2xl mx-auto w-full">
+      <div className="px-6 pb-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -100,14 +100,14 @@ function HistoryContent() {
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="max-w-2xl mx-auto w-full px-6">
+        <div className="px-6">
           {filteredSessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <MessageSquare className="w-12 h-12 mb-4 opacity-50" />
               <p>{searchQuery ? "未找到匹配的会话" : "暂无会话记录"}</p>
             </div>
           ) : (
-            <div className="py-2">
+            <div className="space-y-1">
               {filteredSessions.map((session) => (
                 <SessionItem
                   key={session.id}

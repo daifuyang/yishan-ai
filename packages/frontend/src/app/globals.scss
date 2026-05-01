@@ -77,10 +77,14 @@
 .msg-actions-wrapper {
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
 
   &:hover .msg-action-btn {
     opacity: 1;
+  }
+
+  &.align-end {
+    align-items: flex-end;
   }
 
   .msg-action-btn {
@@ -88,6 +92,7 @@
     margin-top: 0.25rem;
     opacity: 0;
     transition: opacity 200ms;
+    align-self: flex-end;
 
     button {
       opacity: 1;
