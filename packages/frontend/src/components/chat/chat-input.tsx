@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ export function ChatInput({
   const [content, setContent] = useState(initialContent || '');
   const [model, setModel] = useState(() => defaultModel);
   const [mode, setMode] = useState<ChatMode>('build');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (initialContent !== undefined) {
@@ -36,11 +37,27 @@ export function ChatInput({
     }
   }, [initialContent]);
 
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const contentLength = textarea.value.length;
+      const lines = textarea.value.split('\n').length;
+      const estimatedRows = Math.max(1, Math.ceil(contentLength / 50));
+      const rows = Math.min(5, Math.max(1, Math.max(lines, estimatedRows)));
+      textarea.rows = rows;
+    }
+  }, []);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [content, adjustHeight]);
+
   const handleSend = useCallback(() => {
     if (!content.trim() || disabled || isStreaming) return;
     onSend(content, model, mode);
     setContent('');
-  }, [content, model, mode, disabled, isStreaming, onSend]);
+    adjustHeight();
+  }, [content, model, mode, disabled, isStreaming, onSend, adjustHeight]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -54,13 +71,13 @@ export function ChatInput({
   return (
     <div className={noBorder ? 'p-3' : 'border rounded-2xl p-4 shadow-md glass'}>
       <Textarea
+        ref={textareaRef}
         value={content}
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={isStreaming ? 'AI 正在回复...' : '输入消息...'}
         disabled={isDisabled}
-        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none min-h-[52px] max-h-[120px] mb-3 text-[15px] bg-transparent"
-        rows={1}
+        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none mb-3 text-[15px] bg-transparent"
       />
       <div className="flex items-center gap-2">
         <Select value={mode} onValueChange={(v) => setMode(v as ChatMode)} disabled={isDisabled}>
