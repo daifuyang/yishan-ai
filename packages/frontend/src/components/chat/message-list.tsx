@@ -150,13 +150,15 @@ function UserBubble({
       <div className="msg-action-btn">
         <div className="flex gap-1 mt-1">
           {onRollback && (
-            <button
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground gap-1 [&_svg]:size-3"
               onClick={() => onRollback(message.id, message.content)}
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw />
               回退
-            </button>
+            </Button>
           )}
           <CopyButton content={message.content} id={message.id} copiedId={copiedId} onCopy={onCopy} />
         </div>
