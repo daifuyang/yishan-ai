@@ -1,10 +1,10 @@
-import 'dotenv/config';
 import Fastify from 'fastify';
 import app from './app.js';
+import { configManager } from './lib/config-manager.js';
 import { cleanupOldLogs, LOG_DIR, LOG_RETENTION_DAYS } from './lib/logger.js';
 import * as fs from 'fs';
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = configManager.get<number>('server.port') || 4800;
 
 if (!fs.existsSync(LOG_DIR)) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
