@@ -12,16 +12,26 @@ export interface ToolCall {
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
-  content: string;
+  type: 'user' | 'assistant' | 'final';
+  content: string | ContentBlock[];
   thinking?: string;
   toolCalls?: ToolCall[];
+}
+
+export interface ContentBlock {
+  type: 'text' | 'tool_use';
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  result?: string;
+  error?: string;
 }
 
 interface ChatStore {
   messages: Message[];
   isStreaming: boolean;
   streamingContent: string;
-  activeToolCalls: ToolCall[];
   currentEventSource: EventSource | null;
   fetchMessages: (sessionId: string) => Promise<void>;
   sendMessage: (sessionId: string, content: string, model: string, mode?: 'plan' | 'build') => Promise<void>;
@@ -38,7 +48,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   isStreaming: false,
   streamingContent: '',
-  activeToolCalls: [],
   currentEventSource: null,
 
   fetchMessages: async (sessionId) => {
@@ -46,14 +55,41 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const data = await res.json();
 
     if (data.messages) {
-      const messages: Message[] = data.messages.map((m: any) => ({
-        id: m.id,
-        role: m.role,
-        content: Array.isArray(m.content)
-          ? m.content.map((c: any) => c.type === 'text' ? c.text : '').join('')
-          : m.content,
-        toolCalls: m.toolCalls,
-      }));
+      const messages: Message[] = data.messages.map((m: any) => {
+        let content: string | ContentBlock[];
+        let toolCalls: ToolCall[] | undefined;
+
+        if (Array.isArray(m.content)) {
+          content = m.content.map((c: any) => {
+            if (c.type === 'tool_use') {
+              toolCalls = toolCalls || [];
+              toolCalls.push({
+                id: c.id,
+                name: c.name,
+                input: c.input || {},
+                output: c.result,
+                error: c.error,
+                status: c.error ? 'error' : 'completed',
+              });
+            }
+            return c;
+          });
+        } else if (typeof m.content === 'string') {
+          content = m.content;
+        } else if (m.content && typeof m.content === 'object' && m.content.text) {
+          content = m.content.text;
+        } else {
+          content = String(m.content);
+        }
+
+        return {
+          id: m.id,
+          role: m.role,
+          type: m.type || (m.role === 'user' ? 'user' : 'assistant'),
+          content,
+          toolCalls,
+        };
+      });
       set({ messages });
     }
 
@@ -65,10 +101,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   sendMessage: async (sessionId, content, model, mode) => {
     const tempId = crypto.randomUUID();
-    set({ isStreaming: true, streamingContent: '', activeToolCalls: [], messages: [
+    set({ isStreaming: true, streamingContent: '', messages: [
       ...get().messages,
-      { id: tempId, role: 'user', content }
+      { id: tempId, role: 'user', type: 'user', content }
     ]});
+
+    get().subscribe(sessionId);
 
     const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/chat/stream`, {
       method: 'POST',
@@ -84,8 +122,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         ),
       }));
     }
-
-    get().subscribe(sessionId);
   },
 
   subscribe: (sessionId) => {
@@ -107,57 +143,97 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           streamingContent: state.streamingContent + data.delta.text,
         }));
       } else if (data.type === 'tool_call') {
-        set((state) => ({
-          activeToolCalls: [
-            ...state.activeToolCalls,
-            {
-              id: crypto.randomUUID(),
-              name: data.data.tool,
-              input: data.data.args || {},
-              status: 'running',
-            },
-          ],
-        }));
+        const toolUseBlock: ContentBlock = {
+          type: 'tool_use',
+          id: crypto.randomUUID(),
+          name: data.data.tool,
+          input: data.data.args || {},
+        };
+        set((state) => {
+          const lastMsg = state.messages[state.messages.length - 1];
+          if (lastMsg?.role === 'assistant' && Array.isArray(lastMsg.content)) {
+            const existingToolUse = lastMsg.content.find(
+              (c: ContentBlock) => c.type === 'tool_use' && c.name === toolUseBlock.name && JSON.stringify(c.input) === JSON.stringify(toolUseBlock.input)
+            );
+            if (existingToolUse) {
+              return {};
+            }
+            const updatedContent: ContentBlock[] = [...lastMsg.content, toolUseBlock];
+            return {
+              messages: state.messages.map((msg, idx) =>
+                idx === state.messages.length - 1
+                  ? { ...msg, content: updatedContent }
+                  : msg
+              ),
+            };
+          }
+          return {
+            messages: [
+              ...state.messages,
+              {
+                id: crypto.randomUUID(),
+                role: 'assistant' as const,
+                type: 'assistant' as const,
+                content: [toolUseBlock],
+              },
+            ],
+          };
+        });
       } else if (data.type === 'tool_result') {
-        set((state) => ({
-          activeToolCalls: state.activeToolCalls.map((tc, idx) =>
-            idx === state.activeToolCalls.length - 1
-              ? { ...tc, status: 'completed' as const, output: data.data.result }
-              : tc
-          ),
-        }));
+        set((state) => {
+          const messages = [...state.messages];
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+              const toolUseBlock = msg.content.find((c: ContentBlock) => c.type === 'tool_use' && !c.result);
+              if (toolUseBlock) {
+                toolUseBlock.result = data.data.result;
+                break;
+              }
+            }
+          }
+          return { messages };
+        });
       } else if (data.type === 'tool_error') {
-        set((state) => ({
-          activeToolCalls: state.activeToolCalls.map((tc, idx) =>
-            idx === state.activeToolCalls.length - 1
-              ? { ...tc, status: 'error' as const, error: data.data.error }
-              : tc
-          ),
-        }));
+        set((state) => {
+          const messages = [...state.messages];
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+              const toolUseBlock = msg.content.find((c: ContentBlock) => c.type === 'tool_use' && !c.error);
+              if (toolUseBlock) {
+                toolUseBlock.error = data.data.error;
+                break;
+              }
+            }
+          }
+          return { messages };
+        });
       } else if (data.type === 'message_stop') {
         set((state) => {
           const lastMsg = state.messages[state.messages.length - 1];
-          const toolCalls = state.activeToolCalls.length > 0 ? state.activeToolCalls : lastMsg?.toolCalls;
-          let messages;
-          if (lastMsg?.role === 'assistant') {
+          let messages: Message[];
+          if (lastMsg?.role === 'assistant' && Array.isArray(lastMsg.content)) {
+            const textBlock: ContentBlock = { type: 'text', text: state.streamingContent };
+            const newContent = [...lastMsg.content, textBlock];
             messages = state.messages.map((msg, idx) =>
               idx === state.messages.length - 1
-                ? { ...msg, content: state.streamingContent, toolCalls }
+                ? { ...msg, type: 'final' as const, content: newContent }
                 : msg
-            );
+            ) as Message[];
           } else if (state.streamingContent) {
             messages = [
               ...state.messages,
-              { id: crypto.randomUUID(), role: 'assistant' as const, content: state.streamingContent, toolCalls }
+              { id: crypto.randomUUID(), role: 'assistant' as const, type: 'final' as const, content: state.streamingContent }
             ];
           } else {
             messages = state.messages;
           }
-          return { messages, isStreaming: false, streamingContent: '', activeToolCalls: [], currentEventSource: null };
+          return { messages, isStreaming: false, streamingContent: '', currentEventSource: null };
         });
         eventSource.close();
       } else if (data.type === 'error') {
-        set({ isStreaming: false, streamingContent: '', activeToolCalls: [], currentEventSource: null });
+        set({ isStreaming: false, streamingContent: '', currentEventSource: null });
         eventSource.close();
       }
     };
@@ -172,7 +248,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const eventSource = get().currentEventSource;
     if (eventSource) {
       eventSource.close();
-      set({ currentEventSource: null, isStreaming: false, streamingContent: '', activeToolCalls: [] });
+      set({ currentEventSource: null, isStreaming: false, streamingContent: '' });
     }
   },
 
@@ -182,10 +258,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       eventSource.close();
     }
     await fetch(`${API_BASE}/api/sessions/${sessionId}/chat/stop`, { method: 'POST' });
-    set({ isStreaming: false, streamingContent: '', activeToolCalls: [], currentEventSource: null });
+    set({ isStreaming: false, streamingContent: '', currentEventSource: null });
   },
 
-  clearMessages: () => set({ messages: [], isStreaming: false, streamingContent: '', activeToolCalls: [] }),
+  clearMessages: () => set({ messages: [], isStreaming: false, streamingContent: '' }),
 
   rollbackMessage: async (sessionId, messageId) => {
     const state = get();
@@ -205,8 +281,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
 
     const newMessages = state.messages.slice(0, msgIndex);
-    set({ messages: newMessages, isStreaming: false, streamingContent: '', activeToolCalls: [], currentEventSource: null });
+    set({ messages: newMessages, isStreaming: false, streamingContent: '', currentEventSource: null });
 
-    return targetMsg.content;
+    return typeof targetMsg.content === 'string' ? targetMsg.content : JSON.stringify(targetMsg.content);
   },
 }));

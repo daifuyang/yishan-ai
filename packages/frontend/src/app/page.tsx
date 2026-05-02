@@ -15,7 +15,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { sessions, fetchSessions, createSession } = useSessionStore();
-  const { messages, isStreaming, streamingContent, activeToolCalls, fetchMessages, sendMessage, stopStream, clearMessages, rollbackMessage } = useChatStore();
+  const { messages, isStreaming, streamingContent, fetchMessages, sendMessage, stopStream, clearMessages, rollbackMessage } = useChatStore();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rollbackContent, setRollbackContent] = useState<string | undefined>();
@@ -80,7 +80,6 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
             messages={messages}
             isStreaming={isStreaming}
             streamingContent={streamingContent}
-            activeToolCalls={activeToolCalls}
             onRollback={handleRollback}
           />
           <div className="shrink-0 px-6 pb-6 pt-2">

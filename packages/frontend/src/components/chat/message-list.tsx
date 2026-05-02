@@ -6,20 +6,31 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Bot, RotateCcw } from 'lucide-react';
+import { Copy, Check, Bot, RotateCcw, ChevronDown, ChevronUp, Wrench } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { ToolCallBlock, ToolCallBadgeList, type ToolCall } from '@/components/mcp/tool-call-block';
+import { ToolCallBlock, type ToolCall } from '@/components/mcp/tool-call-block';
 
 const markdownComponents: Components = {
   table: ({ children }) => <table>{children}</table>,
 };
 
+interface ContentBlock {
+  type: 'text' | 'tool_use';
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  result?: string;
+  error?: string;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
-  content: string;
+  type?: 'user' | 'assistant' | 'final';
+  content: string | ContentBlock[];
   thinking?: string;
   toolCalls?: ToolCall[];
 }
@@ -28,7 +39,6 @@ interface MessageListProps {
   messages: Message[];
   isStreaming: boolean;
   streamingContent: string;
-  activeToolCalls?: ToolCall[];
   onRollback?: (messageId: string, content: string) => void;
 }
 
@@ -97,6 +107,53 @@ function CopyButton({ content, id, copiedId, onCopy }: {
   );
 }
 
+function ToolUseCard({ block }: { block: ContentBlock }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (block.type !== 'tool_use') return null;
+
+  return (
+    <div className="border rounded-lg p-3 my-2 bg-muted/50">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-sm font-medium"><Wrench className="h-3 w-3" /> {block.name}</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {expanded ? '收起' : '展开'}
+        </Button>
+      </div>
+
+      {expanded && (
+        <div className="mt-3 space-y-2 text-sm">
+          <div>
+            <span className="text-muted-foreground">输入：</span>
+            <pre className="mt-1 p-2 bg-background rounded overflow-auto max-h-32">
+              {JSON.stringify(block.input || {}, null, 2)}
+            </pre>
+          </div>
+          {block.result !== undefined && (
+            <div>
+              <span className="text-muted-foreground">输出：</span>
+              <pre className={cn(
+                "mt-1 p-2 bg-background rounded overflow-auto max-h-48",
+                block.error && "text-destructive"
+              )}>
+                {block.error || block.result}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AssistantBubble({
   message,
   copiedId,
@@ -106,27 +163,44 @@ function AssistantBubble({
   copiedId: string | null;
   onCopy: (content: string, id: string) => void;
 }) {
+  const textContent = typeof message.content === 'string'
+    ? message.content
+    : message.content.filter(c => c.type === 'text').map(c => c.text).join('');
+
+  const toolUseBlocks = typeof message.content === 'string'
+    ? []
+    : message.content.filter(c => c.type === 'tool_use');
+
   return (
     <div className="flex flex-col gap-2 flex-1 min-w-0">
-      {message.toolCalls && message.toolCalls.length > 0 && (
-        <ToolCallBlock toolCalls={message.toolCalls} variant="compact" />
+      {toolUseBlocks.length > 0 && (
+        <div className="text-sm text-muted-foreground">
+          使用了 {toolUseBlocks.length} 个工具
+        </div>
       )}
-      <div className="msg-actions-wrapper">
-        <div className="bg-card text-foreground rounded">
-          <div className="prose dark:prose-invert max-w-none text-[15px]">
-            <ReactMarkdown
-              components={markdownComponents}
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-            >
-              {message.content}
-            </ReactMarkdown>
+
+      {toolUseBlocks.map((block, idx) => (
+        <ToolUseCard key={block.id || idx} block={block} />
+      ))}
+
+      {textContent && (
+        <div className="msg-actions-wrapper">
+          <div className="bg-card text-foreground rounded">
+            <div className="prose dark:prose-invert max-w-none text-[15px]">
+              <ReactMarkdown
+                components={markdownComponents}
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {textContent}
+              </ReactMarkdown>
+            </div>
+          </div>
+          <div className="msg-action-btn">
+            <CopyButton content={textContent} id={message.id} copiedId={copiedId} onCopy={onCopy} />
           </div>
         </div>
-        <div className="msg-action-btn">
-          <CopyButton content={message.content} id={message.id} copiedId={copiedId} onCopy={onCopy} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -142,10 +216,16 @@ function UserBubble({
   onCopy: (content: string, id: string) => void;
   onRollback?: (messageId: string, content: string) => void;
 }) {
+  const textContent = typeof message.content === 'string'
+    ? message.content
+    : JSON.stringify(message.content);
+
   return (
     <div className="msg-actions-wrapper align-end">
       <div className="px-3 py-1.5 rounded bg-primary text-primary-foreground shadow-sm w-fit">
-        <p className="text-[15px] leading-relaxed">{message.content}</p>
+        <div className="prose prose-invert max-w-none text-[15px] prose-p:my-0 prose-li:my-0">
+          <ReactMarkdown>{textContent}</ReactMarkdown>
+        </div>
       </div>
       <div className="msg-action-btn flex gap-1 mt-1">
         {onRollback && (
@@ -153,13 +233,13 @@ function UserBubble({
             variant="ghost"
             size="sm"
             className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground gap-1 [&_svg]:size-3"
-            onClick={() => onRollback(message.id, message.content)}
+            onClick={() => onRollback(message.id, textContent)}
           >
             <RotateCcw />
             回退
           </Button>
         )}
-        <CopyButton content={message.content} id={message.id} copiedId={copiedId} onCopy={onCopy} />
+        <CopyButton content={textContent} id={message.id} copiedId={copiedId} onCopy={onCopy} />
       </div>
     </div>
   );
@@ -204,18 +284,14 @@ function StreamingBubble({ content }: { content: string }) {
   );
 }
 
-function StreamingToolIndicator({ toolCalls }: { toolCalls: ToolCall[] }) {
-  if (toolCalls.length === 0) return null;
-  return (
-    <div className="flex items-center gap-2 mt-2">
-      <ToolCallBadgeList toolCalls={toolCalls} />
-    </div>
-  );
-}
-
-export function MessageList({ messages, isStreaming, streamingContent, activeToolCalls = [], onRollback }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamingContent, onRollback }: MessageListProps) {
   const { containerRef, handleScroll, isNearBottom } = useAutoScroll(isStreaming);
   const { copiedId, handleCopy } = useCopyToClipboard();
+
+  const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+  const hasToolUseBlocks = lastAssistantMsg &&
+    typeof lastAssistantMsg.content !== 'string' &&
+    lastAssistantMsg.content.some(c => c.type === 'tool_use');
 
   return (
     <ScrollArea className="flex-1 px-4 py-6" ref={containerRef} onScroll={handleScroll}>
@@ -237,22 +313,15 @@ export function MessageList({ messages, isStreaming, streamingContent, activeToo
           </div>
         ))}
 
-        {isStreaming && streamingContent && (
+        {isStreaming && !hasToolUseBlocks && (
           <div className="flex gap-4 justify-start animate-fade-in-up">
             <BotAvatar />
             <div className="flex flex-col gap-2 flex-1 min-w-0">
-              <StreamingBubble content={streamingContent} />
-              <StreamingToolIndicator toolCalls={activeToolCalls} />
-            </div>
-          </div>
-        )}
-
-        {isStreaming && !streamingContent && (
-          <div className="flex gap-4 justify-start animate-fade-in-up">
-            <BotAvatar />
-            <div className="flex flex-col gap-2 flex-1 min-w-0">
-              <StreamingIndicator />
-              <StreamingToolIndicator toolCalls={activeToolCalls} />
+              {streamingContent ? (
+                <StreamingBubble content={streamingContent} />
+              ) : (
+                <StreamingIndicator />
+              )}
             </div>
           </div>
         )}

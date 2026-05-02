@@ -7,39 +7,27 @@ export async function GET(
   const { id } = await params;
   const backendUrl = `${BACKEND_URL}/api/sessions/${id}/chat/subscribe`;
 
+  const cookieHeader = request.headers.get('cookie');
+
   const response = await fetch(backendUrl, {
     headers: {
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache',
+      ...(cookieHeader && { 'Cookie': cookieHeader }),
     },
   });
 
-  const reader = response.body?.getReader();
-  const encoder = new TextEncoder();
+  if (!response.ok) {
+    return new Response(await response.text(), { status: response.status });
+  }
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      if (!reader) {
-        controller.close();
-        return;
-      }
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          controller.enqueue(value);
-        }
-      } catch {
-        // Stream ended
-      } finally {
-        controller.close();
-      }
-    },
-    cancel() {
-      reader?.cancel();
-    },
-  });
+  const stream = response.body?.pipeThrough(
+    new TransformStream({
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+      },
+    })
+  );
 
   return new Response(stream, {
     headers: {
