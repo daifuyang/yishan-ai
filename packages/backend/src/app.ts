@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import AutoLoad, { AutoloadPluginOptions } from '@fastify/autoload';
 import { FastifyPluginAsync, FastifyServerOptions } from 'fastify';
-import { getDb, closeDb } from './db/index.js';
+import { prisma } from './lib/stream-processor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,20 +20,21 @@ const app: FastifyPluginAsync<AppOptions> = async (fastify, opts): Promise<void>
     options: opts,
   });
 
-  getDb();
-
-  const streamingSessions = getDb().prepare(
-    "SELECT id FROM sessions WHERE status = 'streaming'"
-  ).all() as { id: string }[];
+  const streamingSessions = await prisma.session.findMany({
+    where: { status: 'streaming' },
+    select: { id: true },
+  });
 
   if (streamingSessions.length > 0) {
     fastify.log.warn(`Found ${streamingSessions.length} streaming sessions on startup, marking as failed`);
-    const updateStmt = getDb().prepare("UPDATE sessions SET status = 'failed' WHERE status = 'streaming'");
-    updateStmt.run();
+    await prisma.session.updateMany({
+      where: { status: 'streaming' },
+      data: { status: 'failed' },
+    });
   }
 
   fastify.addHook('onClose', async () => {
-    closeDb();
+    await prisma.$disconnect();
   });
 };
 

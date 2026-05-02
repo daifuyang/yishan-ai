@@ -158,16 +158,16 @@ function handleToolError(error: string) {
   finalizeToolCall(`Error: ${error}`);
 }
 
-function handleStop() {
+async function handleStop() {
   log('INFO', 'Handling stop, finalizing stream');
 
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   const streamingContent = session?.streamingContent || '';
 
   if (streamingContent) {
-    appendMessage(sessionId, 'assistant', [{ type: 'text', text: streamingContent }], undefined, completedToolCalls);
+    await appendMessage(sessionId, 'assistant', [{ type: 'text', text: streamingContent }], undefined, completedToolCalls);
   }
-  updateSessionStatus(sessionId, 'idle', null);
+  await updateSessionStatus(sessionId, 'idle', null);
   process.send?.({ type: 'done' });
   process.exit(0);
 }

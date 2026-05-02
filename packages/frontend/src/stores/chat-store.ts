@@ -106,7 +106,137 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       { id: tempId, role: 'user', type: 'user', content }
     ]});
 
-    get().subscribe(sessionId);
+    const existingSource = get().currentEventSource;
+    if (existingSource) {
+      existingSource.close();
+    }
+
+    const eventSource = new EventSource(`${API_BASE}/api/sessions/${sessionId}/chat/subscribe`);
+    set({ currentEventSource: eventSource });
+
+    let onMessageHandler: ((event: MessageEvent) => void) | null = null;
+
+    const messageHandler = (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'stream_started') {
+        return;
+      }
+
+      if (data.type === 'content_catchup') {
+        set({ streamingContent: data.content });
+      } else if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta') {
+        set((state) => ({
+          streamingContent: state.streamingContent + data.delta.text,
+        }));
+      } else if (data.type === 'tool_call') {
+        const toolUseBlock: ContentBlock = {
+          type: 'tool_use',
+          id: crypto.randomUUID(),
+          name: data.data.tool,
+          input: data.data.args || {},
+        };
+        set((state) => {
+          const lastMsg = state.messages[state.messages.length - 1];
+          if (lastMsg?.role === 'assistant' && Array.isArray(lastMsg.content)) {
+            const existingToolUse = lastMsg.content.find(
+              (c: ContentBlock) => c.type === 'tool_use' && c.name === toolUseBlock.name && JSON.stringify(c.input) === JSON.stringify(toolUseBlock.input)
+            );
+            if (existingToolUse) {
+              return {};
+            }
+            const updatedContent: ContentBlock[] = [...lastMsg.content, toolUseBlock];
+            return {
+              messages: state.messages.map((msg, idx) =>
+                idx === state.messages.length - 1
+                  ? { ...msg, content: updatedContent }
+                  : msg
+              ),
+            };
+          }
+          return {
+            messages: [
+              ...state.messages,
+              {
+                id: crypto.randomUUID(),
+                role: 'assistant' as const,
+                type: 'assistant' as const,
+                content: [toolUseBlock],
+              },
+            ],
+          };
+        });
+      } else if (data.type === 'tool_result') {
+        set((state) => {
+          const messages = [...state.messages];
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+              const toolUseBlock = msg.content.find((c: ContentBlock) => c.type === 'tool_use' && !c.result);
+              if (toolUseBlock) {
+                toolUseBlock.result = data.data.result;
+                break;
+              }
+            }
+          }
+          return { messages };
+        });
+      } else if (data.type === 'tool_error') {
+        set((state) => {
+          const messages = [...state.messages];
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+              const toolUseBlock = msg.content.find((c: ContentBlock) => c.type === 'tool_use' && !c.error);
+              if (toolUseBlock) {
+                toolUseBlock.error = data.data.error;
+                break;
+              }
+            }
+          }
+          return { messages };
+        });
+      } else if (data.type === 'message_stop') {
+        set((state) => {
+          const lastMsg = state.messages[state.messages.length - 1];
+          let messages: Message[];
+          if (lastMsg?.role === 'assistant' && Array.isArray(lastMsg.content)) {
+            const textBlock: ContentBlock = { type: 'text', text: state.streamingContent };
+            const newContent = [...lastMsg.content, textBlock];
+            messages = state.messages.map((msg, idx) =>
+              idx === state.messages.length - 1
+                ? { ...msg, type: 'final' as const, content: newContent }
+                : msg
+            ) as Message[];
+          } else if (state.streamingContent) {
+            messages = [
+              ...state.messages,
+              { id: crypto.randomUUID(), role: 'assistant' as const, type: 'final' as const, content: state.streamingContent }
+            ];
+          } else {
+            messages = state.messages;
+          }
+          return { messages, isStreaming: false, streamingContent: '', currentEventSource: null };
+        });
+        eventSource.close();
+      } else if (data.type === 'error') {
+        set({ isStreaming: false, streamingContent: '', currentEventSource: null });
+        eventSource.close();
+      }
+    };
+
+    eventSource.onmessage = messageHandler;
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      set({ isStreaming: false, currentEventSource: null });
+    };
+
+    await new Promise<void>((resolve) => {
+      eventSource.onopen = () => {
+        setTimeout(resolve, 50);
+      };
+    });
 
     const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/chat/stream`, {
       method: 'POST',

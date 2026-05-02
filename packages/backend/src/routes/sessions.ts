@@ -32,11 +32,11 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/api/sessions/:id', async (request: any) => {
     const { id } = request.params;
-    const session = getSession(id);
+    const session = await getSession(id);
     if (!session) {
       return { error: 'Session not found' };
     }
-    const messages = getMessages(id);
+    const messages = await getMessages(id);
     return { session, messages };
   });
 
@@ -44,17 +44,17 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params;
     const body = UpdateSessionSchema.parse(request.body);
     if (body.title !== undefined) {
-      updateSessionTitle(id, body.title);
+      await updateSessionTitle(id, body.title);
     }
     if (body.isPinned !== undefined) {
-      updateSessionPin(id, body.isPinned);
+      await updateSessionPin(id, body.isPinned);
     }
     return getSession(id);
   });
 
   fastify.delete('/api/sessions/:id', async (request: any) => {
     const { id } = request.params;
-    deleteSession(id);
+    await deleteSession(id);
     return { ok: true };
   });
 
@@ -66,18 +66,18 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'Missing "from" query parameter' };
     }
 
-    const session = getSession(id);
+    const session = await getSession(id);
     if (!session) {
       return { error: 'Session not found' };
     }
 
     if (restore === 'true') {
-      restoreMessages(id, from);
+      await restoreMessages(id, from);
     } else {
-      softDeleteMessagesAfter(id, from);
+      await softDeleteMessagesAfter(id, from);
     }
 
-    const messages = getMessages(id);
+    const messages = await getMessages(id);
     return { messages };
   });
 };

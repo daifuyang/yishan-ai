@@ -1,6 +1,17 @@
 import { create } from 'zustand';
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  contextWindow?: number;
+}
+
 export interface ConfigState {
+  models: {
+    provider: string;
+    defaultModel: string;
+    models: ModelInfo[];
+  };
   workspace: {
     directories: string[];
     allowDelete: boolean;
@@ -21,6 +32,11 @@ export interface ConfigState {
 const API_BASE = '';
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
+  models: {
+    provider: 'minimax',
+    defaultModel: 'MiniMax-M2.7-highspeed',
+    models: [],
+  },
   workspace: {
     directories: [],
     allowDelete: false,
@@ -39,6 +55,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const res = await fetch(`${API_BASE}/api/config`);
     const config = await res.json();
     set({
+      models: config.models || {
+        provider: 'minimax',
+        defaultModel: 'MiniMax-M2.7-highspeed',
+        models: [],
+      },
       workspace: config.workspace || { directories: [], allowDelete: false },
       tools: config.tools || {
         fs: { enabled: true, workspaceOnly: true },

@@ -33,6 +33,10 @@ export interface LoggingConfig {
   retentionDays: number;
 }
 
+export interface DataConfig {
+  dir: string;
+}
+
 export interface ServerConfig {
   port: number;
 }
@@ -52,6 +56,7 @@ export interface ConfigSchema {
   workspace: WorkspaceConfig;
   tools: ToolsConfig;
   logging: LoggingConfig;
+  data: DataConfig;
   server: ServerConfig;
 }
 
@@ -91,6 +96,9 @@ const DEFAULT_CONFIG: ConfigSchema = {
   logging: {
     dir: path.join(os.homedir(), '.yishan-ai', 'logs'),
     retentionDays: -1,
+  },
+  data: {
+    dir: path.join(os.homedir(), '.yishan-ai', 'data', 'yishan.db'),
   },
   server: {
     port: 4800,
@@ -133,6 +141,7 @@ class ConfigManager {
         exec: { ...DEFAULT_CONFIG.tools.exec, ...loaded.tools?.exec },
       },
       logging: { ...DEFAULT_CONFIG.logging, ...loaded.logging },
+      data: { ...DEFAULT_CONFIG.data, ...loaded.data },
       server: { ...DEFAULT_CONFIG.server, ...loaded.server },
     };
   }

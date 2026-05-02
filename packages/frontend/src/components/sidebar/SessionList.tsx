@@ -179,7 +179,12 @@ function SessionItem({ session }: { session: Session }) {
 }
 
 function SessionListInner() {
-  const { sessions } = useSessionStore();
+  const { sessions, fetchSessions } = useSessionStore();
+
+  React.useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
   const displaySessions = sessions.slice(0, DEFAULT_SESSION_LIMIT);
 
   return (

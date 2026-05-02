@@ -2,10 +2,10 @@ import { EventEmitter } from 'events';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { getLogger } from './logger.js';
+import { configManager } from './config-manager.js';
 
-const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL || 'file:../data/yishan.db',
-});
+const dbUrl = process.env.DATABASE_URL || `file:${configManager.get<string>('data.dir')}`;
+const adapter = new PrismaLibSql({ url: dbUrl });
 export const prisma = new PrismaClient({ adapter });
 
 export interface SSEClient {
@@ -154,13 +154,14 @@ class StreamProcessor extends EventEmitter {
 
     try {
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const modelsConfig = configManager.get('models');
       const client = new Anthropic({
-        apiKey: process.env.MINIMAX_API_KEY,
-        baseURL: process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic',
+        apiKey: modelsConfig?.apiKey || process.env.MINIMAX_API_KEY,
+        baseURL: modelsConfig?.baseUrl || process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic',
       });
 
       const session = await prisma.session.findUnique({ where: { id: sessionId } });
-      const model = session?.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7-highspeed';
+      const model = session?.model || modelsConfig?.defaultModel || process.env.DEFAULT_MODEL || 'MiniMax-M2.7-highspeed';
       const log = getLogger(sessionId);
 
       let fullContent = '';

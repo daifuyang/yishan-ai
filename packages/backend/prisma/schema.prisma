@@ -18,6 +18,8 @@ model Session {
   updatedAt        DateTime  @updatedAt
 
   messages         Message[]
+
+  @@map("sessions")
 }
 
 model Message {
@@ -36,4 +38,5 @@ model Message {
 
   @@index([sessionId, createdAt])
   @@index([sessionId])
+  @@map("messages")
 }

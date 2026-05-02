@@ -1,11 +1,20 @@
 import { FastifyPluginAsync } from 'fastify';
 import { getMcpManager, MCPConfig } from '../lib/mcp-manager.js';
 
+function mcpLog(level: 'INFO' | 'WARN' | 'ERROR', message: string, meta?: Record<string, unknown>) {
+  const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+  console.log(`[${timestamp}] [MCP] [${level}] ${message}${metaStr}`);
+}
+
 const mcpRoutes: FastifyPluginAsync = async (fastify) => {
   const mcpManager = getMcpManager();
 
   await mcpManager.loadConfig();
-  await mcpManager.reconnectAll();
+
+  mcpManager.reconnectAll().catch((err) => {
+    mcpLog('WARN', 'MCP reconnect failed, continuing without MCP', { error: err.message });
+  });
 
   fastify.get('/api/mcp/servers', async () => {
     return mcpManager.getServers();

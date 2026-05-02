@@ -7,6 +7,7 @@ import { ChatLayout } from "@/components/layout/ChatLayout";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSessionStore } from "@/stores/session-store";
 import { useChatStore } from "@/stores/chat-store";
+import { useConfigStore } from "@/stores/config-store";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { EmptyState } from "@/components/chat/empty-state";
@@ -14,17 +15,19 @@ import { EmptyState } from "@/components/chat/empty-state";
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { sessions, fetchSessions, createSession } = useSessionStore();
+  const { sessions, createSession, fetchSessions } = useSessionStore();
   const { messages, isStreaming, streamingContent, fetchMessages, sendMessage, stopStream, clearMessages, rollbackMessage } = useChatStore();
+  const { fetchConfig } = useConfigStore();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rollbackContent, setRollbackContent] = useState<string | undefined>();
 
-  React.useEffect(() => {
+  useEffect(() => {
+    fetchConfig();
     fetchSessions();
-  }, [fetchSessions]);
+  }, [fetchConfig, fetchSessions]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (sessionId) {
       setIsLoading(true);
       fetchMessages(sessionId)

@@ -1,4 +1,4 @@
-import { getDb } from '../db/index.js';
+import { prisma } from '../lib/stream-processor.js';
 import { getLogger } from '../lib/logger.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -29,108 +29,142 @@ export interface StoredMessage {
   deletedAt?: number;
 }
 
-export function getMessages(sessionId: string, limit = 100, offset = 0): StoredMessage[] {
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT id, session_id as sessionId, role, content, tool_calls as toolCalls, created_at as createdAt,
-           usage_input as usageInput, usage_output as usageOutput, deleted_at as deletedAt
-    FROM messages
-    WHERE session_id = ? AND deleted_at IS NULL
-    ORDER BY created_at ASC
-    LIMIT ? OFFSET ?
-  `).all(sessionId, limit, offset) as any[];
-
-  return rows.map(row => ({
-    ...row,
-    content: JSON.parse(row.content),
-    toolCalls: row.toolCalls ? JSON.parse(row.toolCalls) : undefined,
-  }));
+function parseContent(content: string | object[]): string | object[] {
+  if (typeof content === 'string') {
+    try {
+      return JSON.parse(content);
+    } catch {
+      return content;
+    }
+  }
+  return content;
 }
 
-export function appendMessage(
+function toStoredMessage(m: any): StoredMessage {
+  return {
+    id: m.id,
+    sessionId: m.sessionId,
+    role: m.role as 'user' | 'assistant',
+    content: parseContent(m.content),
+    toolCalls: m.toolCalls ? JSON.parse(m.toolCalls) : undefined,
+    createdAt: m.createdAt.getTime(),
+    usageInput: m.usageInput ?? undefined,
+    usageOutput: m.usageOutput ?? undefined,
+    deletedAt: m.deletedAt ? m.deletedAt.getTime() : undefined,
+  };
+}
+
+export async function getMessages(sessionId: string, limit = 100, offset = 0): Promise<StoredMessage[]> {
+  const messages = await prisma.message.findMany({
+    where: { sessionId, deletedAt: null },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+    skip: offset,
+  });
+  return messages.map(toStoredMessage);
+}
+
+export async function appendMessage(
   sessionId: string,
   role: 'user' | 'assistant',
   content: string | object[],
   usage?: { inputTokens: number; outputTokens: number },
   toolCalls?: any[]
-): StoredMessage {
-  const db = getDb();
-  const id = crypto.randomUUID();
-  const now = Date.now();
-  const contentJson = JSON.stringify(content);
+): Promise<StoredMessage> {
+  const contentJson = typeof content === 'string' ? content : JSON.stringify(content);
   const toolCallsJson = toolCalls ? JSON.stringify(toolCalls) : null;
 
-  db.prepare(`
-    INSERT INTO messages (id, session_id, role, content, tool_calls, created_at, usage_input, usage_output)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, sessionId, role, contentJson, toolCallsJson, now, usage?.inputTokens ?? null, usage?.outputTokens ?? null);
+  const message = await prisma.message.create({
+    data: {
+      id: crypto.randomUUID(),
+      sessionId,
+      role,
+      type: role === 'user' ? 'user' : 'assistant',
+      content: contentJson,
+      toolCalls: toolCallsJson,
+      usageInput: usage?.inputTokens,
+      usageOutput: usage?.outputTokens,
+    },
+  });
 
-  db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(now, sessionId);
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { updatedAt: new Date() },
+  });
 
   storeLog(sessionId, 'DEBUG', 'Message appended', {
-    messageId: id.slice(0, 8),
+    messageId: message.id.slice(0, 8),
     role,
     contentLength: typeof content === 'string' ? content.length : JSON.stringify(content).length,
     toolCallCount: toolCalls?.length || 0,
   });
 
-  return { id, sessionId, role, content, toolCalls, createdAt: now, usageInput: usage?.inputTokens, usageOutput: usage?.outputTokens };
+  return toStoredMessage(message);
 }
 
-export function rewriteMessages(sessionId: string, messages: { role: string; content: any }[]): void {
-  const db = getDb();
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM messages WHERE session_id = ?').run(sessionId);
-    const insert = db.prepare(`
-      INSERT INTO messages (id, session_id, role, content, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    for (const msg of messages) {
-      insert.run(crypto.randomUUID(), sessionId, msg.role, JSON.stringify(msg.content), Date.now());
-    }
-    db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(Date.now(), sessionId);
+export async function rewriteMessages(sessionId: string, messages: { role: string; content: any }[]): Promise<void> {
+  await prisma.message.deleteMany({ where: { sessionId } });
+
+  await prisma.message.createMany({
+    data: messages.map(msg => ({
+      id: crypto.randomUUID(),
+      sessionId,
+      role: msg.role,
+      type: msg.role === 'user' ? 'user' : 'assistant',
+      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+    })),
   });
-  tx();
+
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { updatedAt: new Date() },
+  });
+
   storeLog(sessionId, 'DEBUG', 'Messages rewritten', { messageCount: messages.length });
 }
 
-export function getAnthropicMessages(sessionId: string): { role: string; content: any }[] {
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT role, content FROM messages WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at ASC
-  `).all(sessionId) as any[];
-  return rows.map(row => ({ role: row.role, content: JSON.parse(row.content) }));
+export async function getAnthropicMessages(sessionId: string): Promise<{ role: string; content: any }[]> {
+  const messages = await prisma.message.findMany({
+    where: { sessionId, deletedAt: null },
+    orderBy: { createdAt: 'asc' },
+    select: { role: true, content: true },
+  });
+  return messages.map(m => ({ role: m.role, content: parseContent(m.content) }));
 }
 
-export function softDeleteMessagesAfter(sessionId: string, messageId: string): void {
-  const db = getDb();
+export async function softDeleteMessagesAfter(sessionId: string, messageId: string): Promise<void> {
+  const msg = await prisma.message.findUnique({ where: { id: messageId, sessionId } });
+  if (!msg) return;
 
-  const msgRow = db.prepare(`
-    SELECT created_at FROM messages WHERE id = ? AND session_id = ?
-  `).get(messageId, sessionId) as { created_at: number } | undefined;
+  await prisma.message.updateMany({
+    where: {
+      sessionId,
+      createdAt: { gte: msg.createdAt },
+      deletedAt: null,
+    },
+    data: { deletedAt: new Date() },
+  });
 
-  if (!msgRow) return;
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { updatedAt: new Date() },
+  });
 
-  const now = Date.now();
-  db.prepare(`
-    UPDATE messages SET deleted_at = ? WHERE session_id = ? AND created_at >= ? AND deleted_at IS NULL
-  `).run(now, sessionId, msgRow.created_at);
-
-  db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(now, sessionId);
   storeLog(sessionId, 'DEBUG', 'Messages soft deleted after', { messageId: messageId.slice(0, 8) });
 }
 
-export function restoreMessages(sessionId: string, messageId: string): void {
-  const db = getDb();
+export async function restoreMessages(sessionId: string, messageId: string): Promise<void> {
+  const msg = await prisma.message.findUnique({ where: { id: messageId, sessionId } });
+  if (!msg) return;
 
-  const msgRow = db.prepare(`
-    SELECT created_at FROM messages WHERE id = ? AND session_id = ?
-  `).get(messageId, sessionId) as { created_at: number } | undefined;
+  await prisma.message.updateMany({
+    where: {
+      sessionId,
+      createdAt: { gte: msg.createdAt },
+      deletedAt: { not: null },
+    },
+    data: { deletedAt: null },
+  });
 
-  if (!msgRow) return;
-
-  db.prepare(`
-    UPDATE messages SET deleted_at = NULL WHERE session_id = ? AND created_at >= ? AND deleted_at IS NOT NULL
-  `).run(sessionId, msgRow.created_at);
   storeLog(sessionId, 'DEBUG', 'Messages restored', { messageId: messageId.slice(0, 8) });
 }

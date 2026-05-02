@@ -5,7 +5,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { SendHorizonal, Square } from 'lucide-react';
-import { AVAILABLE_MODELS, type ChatMode } from '@/lib/constants';
+import { useConfigStore } from '@/stores/config-store';
+import type { ChatMode } from '@/lib/constants';
 
 interface ChatInputProps {
   onSend: (content: string, model: string, mode: ChatMode) => void;
@@ -22,14 +23,27 @@ export function ChatInput({
   onStop,
   isStreaming,
   disabled,
-  defaultModel = 'MiniMax-M2.7-highspeed',
+  defaultModel,
   noBorder,
   initialContent,
 }: ChatInputProps) {
+  const { models, fetchConfig } = useConfigStore();
   const [content, setContent] = useState(initialContent || '');
-  const [model, setModel] = useState(() => defaultModel);
+  const [model, setModel] = useState(() => defaultModel || models.defaultModel || 'MiniMax-M2.7-highspeed');
   const [mode, setMode] = useState<ChatMode>('build');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (models.models.length === 0) {
+      fetchConfig();
+    }
+  }, [models.models.length, fetchConfig]);
+
+  useEffect(() => {
+    if (defaultModel && defaultModel !== model) {
+      setModel(defaultModel);
+    }
+  }, [defaultModel]);
 
   useEffect(() => {
     if (initialContent !== undefined) {
@@ -53,7 +67,7 @@ export function ChatInput({
   }, [content, adjustHeight]);
 
   const handleSend = useCallback(() => {
-    if (!content.trim() || disabled || isStreaming) return;
+    if (!content.trim() || disabled || isStreaming || model === 'no-model') return;
     onSend(content, model, mode);
     setContent('');
     adjustHeight();
@@ -67,6 +81,7 @@ export function ChatInput({
   }, [handleSend]);
 
   const isDisabled = disabled || isStreaming;
+  const modelList = models.models.length > 0 ? models.models : [{ id: 'no-model', name: '暂无' }];
 
   return (
     <div className={noBorder ? 'p-3' : 'border rounded-2xl p-4 shadow-md glass'}>
@@ -95,7 +110,7 @@ export function ChatInput({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {AVAILABLE_MODELS.map((m) => (
+            {modelList.map((m) => (
               <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
             ))}
           </SelectContent>
@@ -109,7 +124,7 @@ export function ChatInput({
             停止
           </Button>
         ) : (
-          <Button onClick={handleSend} disabled={!content.trim() || isDisabled} className="h-8 px-4 gap-1.5">
+          <Button onClick={handleSend} disabled={!content.trim() || isDisabled || model === 'no-model'} className="h-8 px-4 gap-1.5">
             <SendHorizonal className="w-4 h-4" />
           </Button>
         )}

@@ -1,4 +1,4 @@
-import { getDb } from '../db/index.js';
+import { prisma } from '../lib/stream-processor.js';
 import { getLogger } from '../lib/logger.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -29,86 +29,93 @@ export interface Session {
   messageCount?: number;
 }
 
-export function listSessions(limit = 50, offset = 0): Session[] {
-  const db = getDb();
-  return db.prepare(`
-    SELECT s.id, s.title, s.model, s.status, s.is_pinned,
-           s.created_at as createdAt, s.updated_at as updatedAt,
-           COUNT(m.id) as messageCount
-    FROM sessions s
-    LEFT JOIN messages m ON m.session_id = s.id
-    GROUP BY s.id
-    ORDER BY s.is_pinned DESC, s.updated_at DESC
-    LIMIT ? OFFSET ?
-  `).all(limit, offset) as Session[];
+function toSession(s: any): Session {
+  return {
+    id: s.id,
+    title: s.title,
+    model: s.model,
+    status: s.status,
+    streamingContent: s.streamingContent ?? undefined,
+    isPinned: s.isPinned,
+    createdAt: s.createdAt.getTime(),
+    updatedAt: s.updatedAt.getTime(),
+    messageCount: s._count?.messages,
+  };
 }
 
-export function getSession(id: string): Session | undefined {
-  const db = getDb();
-  return db.prepare(`
-    SELECT id, title, model, status, streaming_content as streamingContent,
-           is_pinned as isPinned, created_at as createdAt, updated_at as updatedAt
-    FROM sessions WHERE id = ?
-  `).get(id) as Session | undefined;
+export async function listSessions(limit = 50, offset = 0): Promise<Session[]> {
+  const sessions = await prisma.session.findMany({
+    include: { _count: { select: { messages: true } } },
+    orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
+    take: limit,
+    skip: offset,
+  });
+  return sessions.map(toSession);
 }
 
-export function createSession(model: string, title?: string): Session {
-  const db = getDb();
-  const id = crypto.randomUUID();
-  const now = Date.now();
-  db.prepare(`
-    INSERT INTO sessions (id, title, model, is_pinned, created_at, updated_at)
-    VALUES (?, ?, ?, 0, ?, ?)
-  `).run(id, title || '新对话', model, now, now);
-  storeLog(id, 'DEBUG', 'Session created', { title: title || '新对话', model });
-  return { id, title: title || '新对话', model, status: 'idle', isPinned: false, createdAt: now, updatedAt: now };
+export async function getSession(id: string): Promise<Session | undefined> {
+  const s = await prisma.session.findUnique({
+    where: { id },
+    include: { _count: { select: { messages: true } } },
+  });
+  return s ? toSession(s) : undefined;
 }
 
-export function updateSessionTitle(id: string, title: string): void {
-  const db = getDb();
-  db.prepare('UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?')
-    .run(title, Date.now(), id);
+export async function createSession(model: string, title?: string): Promise<Session> {
+  const session = await prisma.session.create({
+    data: {
+      id: crypto.randomUUID(),
+      title: title || '新对话',
+      model,
+      status: 'idle',
+      isPinned: false,
+    },
+    include: { _count: { select: { messages: true } } },
+  });
+  storeLog(session.id, 'DEBUG', 'Session created', { title: session.title, model });
+  return toSession(session);
+}
+
+export async function updateSessionTitle(id: string, title: string): Promise<void> {
+  await prisma.session.update({ where: { id }, data: { title } });
   storeLog(id, 'DEBUG', 'Session title updated', { title });
 }
 
-export function updateSessionPin(id: string, isPinned: boolean): void {
-  const db = getDb();
-  db.prepare('UPDATE sessions SET is_pinned = ?, updated_at = ? WHERE id = ?')
-    .run(isPinned ? 1 : 0, Date.now(), id);
+export async function updateSessionPin(id: string, isPinned: boolean): Promise<void> {
+  await prisma.session.update({ where: { id }, data: { isPinned } });
 }
 
-export function deleteSession(id: string): void {
-  const db = getDb();
-  db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+export async function deleteSession(id: string): Promise<void> {
+  await prisma.session.delete({ where: { id } });
   storeLog(id, 'DEBUG', 'Session deleted');
 }
 
-export function updateSessionStatus(
+export async function updateSessionStatus(
   id: string,
   status: 'idle' | 'streaming' | 'completed' | 'failed',
   streamingContent?: string | null
-): void {
-  const db = getDb();
-  db.prepare(
-    'UPDATE sessions SET status = ?, streaming_content = ?, updated_at = ? WHERE id = ?'
-  ).run(status, streamingContent ?? null, Date.now(), id);
+): Promise<void> {
+  await prisma.session.update({
+    where: { id },
+    data: { status, streamingContent },
+  });
   storeLog(id, 'DEBUG', 'Session status updated', { status, streamingContentLength: streamingContent?.length });
 }
 
-export function appendStreamingContent(id: string, chunk: string): void {
-  const db = getDb();
-  db.prepare(`
-    UPDATE sessions
-    SET streaming_content = COALESCE(streaming_content, '') || ?,
-        updated_at = ?
-    WHERE id = ?
-  `).run(chunk, Date.now(), id);
+export async function appendStreamingContent(id: string, chunk: string): Promise<void> {
+  const session = await prisma.session.findUnique({ where: { id } });
+  if (session) {
+    await prisma.session.update({
+      where: { id },
+      data: { streamingContent: (session.streamingContent || '') + chunk },
+    });
+  }
 }
 
-export function autoTitle(sessionId: string, userContent: string): void {
-  const session = getSession(sessionId);
+export async function autoTitle(sessionId: string, userContent: string): Promise<void> {
+  const session = await getSession(sessionId);
   if (session && session.title === '新对话' && typeof userContent === 'string') {
     const title = userContent.slice(0, 30) + (userContent.length > 30 ? '...' : '');
-    updateSessionTitle(sessionId, title);
+    await updateSessionTitle(sessionId, title);
   }
 }
