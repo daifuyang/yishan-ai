@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  title            String    @default("新对话")
+  model            String
+  status           String    @default("idle")
+  streamingContent String?
+  isPinned         Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  messages         Message[]
+}
+
+model Message {
+  id         String    @id @default(cuid())
+  sessionId  String
+  role       String
+  type      String    @default("user")
+  content    String
+  toolCalls  String?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  usageInput  Int?
+  usageOutput Int?
+
+  session    Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([sessionId])
+}
