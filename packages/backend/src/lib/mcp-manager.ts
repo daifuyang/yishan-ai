@@ -2,9 +2,14 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { EventEmitter } from 'events';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { fsProvider } from './fs-provider.js';
+
+const execAsync = promisify(exec);
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -14,6 +19,218 @@ function mcpLog(level: 'INFO' | 'WARN' | 'ERROR', message: string, meta?: Record
   const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
   console.log(`[${timestamp}] [MCP] [${level}] ${message}${metaStr}`);
 }
+
+interface BuiltInTool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, any>;
+    required?: string[];
+  };
+  handler: (args: Record<string, any>) => Promise<any>;
+}
+
+const builtInTools: Map<string, BuiltInTool> = new Map([
+  ['read_file', {
+    name: 'read_file',
+    description: 'Read the complete contents of a file as text',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+    },
+    handler: async (args) => {
+      const result = await fsProvider.read_file(args.path);
+      if (result.error) throw new Error(result.error);
+      return { content: [{ type: 'text', text: result.content }] };
+    },
+  }],
+  ['write_file', {
+    name: 'write_file',
+    description: 'Create a new file or overwrite an existing file',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' }, content: { type: 'string' } },
+      required: ['path', 'content'],
+    },
+    handler: async (args) => {
+      const result = await fsProvider.write_file(args.path, args.content);
+      if (result.error) throw new Error(result.error);
+      return { content: [{ type: 'text', text: `File written: ${args.path}` }] };
+    },
+  }],
+  ['edit_file', {
+    name: 'edit_file',
+    description: 'Edit a file by replacing exact text',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        old_string: { type: 'string' },
+        new_string: { type: 'string' },
+      },
+      required: ['path', 'old_string', 'new_string'],
+    },
+    handler: async (args) => {
+      const result = await fsProvider.edit_file(args.path, args.old_string, args.new_string);
+      if (result.error) throw new Error(result.error);
+      return { content: [{ type: 'text', text: `Edited: ${args.path}` }] };
+    },
+  }],
+  ['delete_file', {
+    name: 'delete_file',
+    description: 'Delete a file',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+    },
+    handler: async (args) => {
+      const result = await fsProvider.delete_file(args.path);
+      if (result.error) throw new Error(result.error);
+      return { content: [{ type: 'text', text: `Deleted: ${args.path}` }] };
+    },
+  }],
+  ['list_directory', {
+    name: 'list_directory',
+    description: 'List all files and directories in a path',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+    },
+    handler: async (args) => {
+      const result = await fsProvider.list_directory(args.path);
+      if (result.error) throw new Error(result.error);
+      const entries = result.entries.map(e => {
+        const name = path.basename(e);
+        return fs.existsSync(e) && fs.statSync(e).isDirectory() ? `[DIR] ${name}` : `[FILE] ${name}`;
+      }).join('\n');
+      return { content: [{ type: 'text', text: entries || '(empty)' }] };
+    },
+  }],
+  ['search_files', {
+    name: 'search_files',
+    description: 'Search for files matching a glob pattern',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' }, pattern: { type: 'string' } },
+      required: ['path', 'pattern'],
+    },
+    handler: async (args) => {
+      const result = await fsProvider.search_files(args.pattern, { cwd: args.path });
+      if (result.error) throw new Error(result.error);
+      return { content: [{ type: 'text', text: result.files.join('\n') || '(no matches)' }] };
+    },
+  }],
+  ['diff_files', {
+    name: 'diff_files',
+    description: 'Compare two files and show differences',
+    inputSchema: {
+      type: 'object',
+      properties: { file1: { type: 'string' }, file2: { type: 'string' } },
+      required: ['file1', 'file2'],
+    },
+    handler: async (args) => {
+      const result = await fsProvider.diff_files(args.file1, args.file2);
+      if (result.error) throw new Error(result.error);
+      return { content: [{ type: 'text', text: result.diff || '(no differences)' }] };
+    },
+  }],
+  ['bash', {
+    name: 'bash',
+    description: 'Execute a bash command and return the output',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'The bash command to execute' },
+        cwd: { type: 'string', description: 'Working directory for the command' },
+      },
+      required: ['command'],
+    },
+    handler: async (args) => {
+      try {
+        const { stdout, stderr } = await execAsync(args.command, {
+          cwd: args.cwd || process.cwd(),
+          timeout: 60000,
+        });
+        let output = stdout.replace(/[\x1b\x9b][\(]?[0-?]*[ -/]*[@-~]/g, '');
+        output = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+        if (stderr) {
+          output += '\nSTDERR: ' + stderr;
+        }
+        return { content: [{ type: 'text', text: output || '(no output)' }] };
+      } catch (error: any) {
+        return { content: [{ type: 'text', text: 'Error: ' + error.message }] };
+      }
+    },
+  }],
+  ['get_current_time', {
+    name: 'get_current_time',
+    description: 'Get the current system time in multiple formats',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        timezone: {
+          type: 'string',
+          description: 'Timezone name (e.g., "Asia/Shanghai", "America/New_York"). Defaults to local timezone.',
+        },
+        format: {
+          type: 'string',
+          enum: ['full', 'date', 'time', 'iso'],
+          description: 'Output format: "full" (complete datetime), "date" (YYYY-MM-DD), "time" (HH:mm:ss), "iso" (ISO 8601)',
+          default: 'full',
+        },
+      },
+    },
+    handler: async (args) => {
+      const now = new Date();
+      let output = '';
+
+      if (args.timezone) {
+        try {
+          const formatter = new Intl.DateTimeFormat('zh-CN', {
+            timeZone: args.timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          });
+          output = formatter.format(now);
+          if (args.format === 'iso') {
+            output = now.toISOString();
+          }
+        } catch {
+          return { content: [{ type: 'text', text: `Invalid timezone: ${args.timezone}` }] };
+        }
+      } else {
+        const localeStr = now.toLocaleString('zh-CN');
+        const isoStr = now.toISOString();
+        const utcStr = now.toUTCString();
+
+        switch (args.format) {
+          case 'date':
+            output = now.toLocaleDateString('zh-CN');
+            break;
+          case 'time':
+            output = now.toLocaleTimeString('zh-CN');
+            break;
+          case 'iso':
+            output = isoStr;
+            break;
+          default:
+            output = `本地时间: ${localeStr}\nUTC 时间: ${utcStr}\nISO 时间: ${isoStr}`;
+        }
+      }
+
+      return { content: [{ type: 'text', text: output }] };
+    },
+  }],
+]);
 
 export interface MCPConfig {
   command?: string;
@@ -204,6 +421,13 @@ export class McpManager extends EventEmitter {
     for (const conn of this.connections.values()) {
       allTools.push(...conn.tools);
     }
+    for (const tool of builtInTools.values()) {
+      allTools.push({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      });
+    }
     return allTools;
   }
 
@@ -217,6 +441,22 @@ export class McpManager extends EventEmitter {
 
   async callTool(toolName: string, args: Record<string, any>): Promise<any> {
     const startTime = Date.now();
+
+    if (builtInTools.has(toolName)) {
+      const tool = builtInTools.get(toolName)!;
+      mcpLog('INFO', `Calling built-in tool: ${toolName}`, { argsKeys: Object.keys(args) });
+      try {
+        const result = await tool.handler(args);
+        const duration = Date.now() - startTime;
+        mcpLog('INFO', `Built-in tool ${toolName} completed`, { duration });
+        return result;
+      } catch (err: any) {
+        const duration = Date.now() - startTime;
+        mcpLog('ERROR', `Built-in tool ${toolName} failed`, { duration, error: err.message });
+        throw err;
+      }
+    }
+
     for (const [serverName, conn] of this.connections) {
       const tool = conn.tools.find(t => t.name === toolName);
       if (tool) {

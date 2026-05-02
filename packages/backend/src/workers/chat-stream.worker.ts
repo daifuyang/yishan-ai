@@ -14,6 +14,21 @@ let tools: any[] = [];
 let pendingToolCall: { name: string; input: string; id: string } | null = null;
 let completedToolCalls: { id: string; name: string; input: Record<string, unknown>; output?: unknown; error?: string }[] = [];
 let isStopping = false;
+let pendingToolCallsQueue: { name: string; input: string; id: string; inputStr: string }[] = [];
+let currentStreamingContent: string = '';
+let pendingToolInputById: Map<string, string> = new Map();
+let emittedToolNames: Map<string, string> = new Map();
+let emittedToolIds: string[] = [];
+
+process.on('uncaughtException', (err) => {
+  log('ERROR', 'Uncaught exception in worker', { error: String(err), stack: err.stack });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  log('ERROR', 'Unhandled rejection in worker', { reason: String(reason) });
+  process.exit(1);
+});
 
 function log(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', message: string, meta?: Record<string, unknown>) {
   process.send?.({ type: 'log', data: { level, message, meta: meta || {} } });
@@ -64,34 +79,46 @@ process.on('message', async (msg: { type: string; data?: any }) => {
 });
 
 function finalizeToolCall(content: string) {
-  if (!pendingToolCall) return;
+  const toolId = emittedToolIds.shift();
+  if (!toolId) {
+    log('WARN', 'No emitted tool ID found for result');
+    return;
+  }
 
-  const { name, id, input } = pendingToolCall;
-  pendingToolCall = null;
+  const toolName = emittedToolNames.get(toolId) || pendingToolCallsQueue.find(q => q.id === toolId)?.name ||
+    (pendingToolCall?.id === toolId ? pendingToolCall.name : 'unknown');
+  emittedToolNames.delete(toolId);
+  const inputStr = pendingToolInputById.get(toolId) || '';
+  pendingToolInputById.delete(toolId);
 
   const toolCallRecord = {
-    id,
-    name,
-    input: JSON.parse(input),
+    id: toolId,
+    name: toolName,
+    input: JSON.parse(inputStr || '{}'),
     output: content.startsWith('Error:') ? undefined : content,
     error: content.startsWith('Error:') ? content : undefined,
   };
   completedToolCalls.push(toolCallRecord);
 
   log('DEBUG', 'Finalizing tool call', {
-    toolId: id,
-    toolName: name,
+    toolId,
+    toolName,
     isError: content.startsWith('Error:'),
     outputPreview: content.slice(0, 200),
   });
+
+  if (currentStreamingContent) {
+    appendMessage(sessionId, 'assistant', [{ type: 'text', text: currentStreamingContent }], undefined, []);
+    currentStreamingContent = '';
+  }
 
   messages.push({
     role: 'assistant',
     content: [{
       type: 'tool_use',
-      id,
-      name,
-      input: JSON.parse(input),
+      id: toolId,
+      name: toolName,
+      input: JSON.parse(inputStr || '{}'),
     }],
   });
 
@@ -99,7 +126,7 @@ function finalizeToolCall(content: string) {
     role: 'user',
     content: [{
       type: 'tool_result',
-      tool_use_id: id,
+      tool_use_id: toolId,
       content,
     }],
   });
@@ -108,9 +135,22 @@ function finalizeToolCall(content: string) {
 }
 
 function handleToolResult(result: any) {
-  const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-  log('DEBUG', 'Handling tool result', { resultLength: resultStr.length });
-  finalizeToolCall(resultStr);
+  let content: string;
+  if (typeof result === 'string') {
+    content = result;
+  } else if (result.content && Array.isArray(result.content)) {
+    content = result.content.map((block: any) => {
+      if (block.type === 'text') return block.text;
+      if (block.type === 'image') return `[Image: ${block.source?.url || 'embedded'}]`;
+      return JSON.stringify(block);
+    }).join('\n');
+  } else if (result.text) {
+    content = result.text;
+  } else {
+    content = JSON.stringify(result);
+  }
+  log('DEBUG', 'Handling tool result', { resultLength: content.length, contentPreview: content.slice(0, 200) });
+  finalizeToolCall(content);
 }
 
 function handleToolError(error: string) {
@@ -139,12 +179,12 @@ async function run() {
 async function makeApiCall() {
   const client = new Anthropic({
     apiKey: process.env.MINIMAX_API_KEY,
-    baseURL: process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic/',
+    baseURL: process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic',
   });
 
-  let fullContent = '';
+  currentStreamingContent = '';
 
-  const model = options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7';
+  const model = options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7-highspeed';
   const maxTokens = options.maxTokens || 4096;
   const temperature = 1;
   const systemPrompt = options.systemPrompt || '';
@@ -186,37 +226,57 @@ async function makeApiCall() {
 
       if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
-          fullContent += event.delta.text;
+          currentStreamingContent += event.delta.text;
           appendStreamingContent(sessionId, event.delta.text);
           process.send?.({ type: 'delta', data: event });
         } else if (event.delta.type === 'input_json_delta') {
           if (pendingToolCall) {
-            pendingToolCall.input += (event.delta as any).partial_json;
+            const current = pendingToolInputById.get(pendingToolCall.id) || '';
+            pendingToolInputById.set(pendingToolCall.id, current + (event.delta as any).partial_json);
           }
         }
       } else if (event.type === 'content_block_start') {
         if ((event as any).content_block?.type === 'tool_use') {
           const block = (event as any).content_block;
+          if (pendingToolCall || pendingToolCallsQueue.length > 0) {
+            const currentInputStr = pendingToolInputById.get(pendingToolCall?.id || '') || pendingToolCall?.input || '';
+            pendingToolCallsQueue.push({ name: pendingToolCall?.name || '', id: pendingToolCall?.id || '', input: pendingToolCall?.input || '', inputStr: currentInputStr });
+            log('DEBUG', 'Queued pending tool_use block, queue size', { queueSize: pendingToolCallsQueue.length });
+          }
           pendingToolCall = {
             name: block?.name,
             id: block?.id,
             input: '',
           };
+          pendingToolInputById.set(block?.id, '');
           log('DEBUG', 'Started tool_use block', { toolName: block?.name, toolId: block?.id });
         }
       } else if (event.type === 'content_block_stop') {
-        if (pendingToolCall && pendingToolCall.input) {
-          try {
-            const args = JSON.parse(pendingToolCall.input);
-            const sanitizedArgs = sanitizeArgs(args);
-            log('INFO', 'Emitting tool_call to parent', {
-              toolName: pendingToolCall.name,
-              toolId: pendingToolCall.id,
-              args: sanitizedArgs,
-            });
-            process.send?.({ type: 'tool_call', data: { tool: pendingToolCall.name, args } });
-          } catch (e) {
-            log('ERROR', 'Failed to parse tool input JSON', { error: String(e), input: pendingToolCall.input.slice(0, 200) });
+        if (pendingToolCall) {
+          const inputStr = pendingToolInputById.get(pendingToolCall.id) || pendingToolCall.input;
+          if (inputStr) {
+            try {
+              const args = JSON.parse(inputStr);
+              const sanitizedArgs = sanitizeArgs(args);
+              log('INFO', 'Emitting tool_call to parent', {
+                toolName: pendingToolCall.name,
+                toolId: pendingToolCall.id,
+                args: sanitizedArgs,
+              });
+              process.send?.({ type: 'tool_call', data: { tool: pendingToolCall.name, args } });
+              emittedToolIds.push(pendingToolCall.id);
+              emittedToolNames.set(pendingToolCall.id, pendingToolCall.name);
+              const nextQueued = pendingToolCallsQueue.shift();
+              if (nextQueued) {
+                pendingToolCall = { name: nextQueued.name, id: nextQueued.id, input: '' };
+                pendingToolInputById.set(nextQueued.id, nextQueued.inputStr);
+                log('DEBUG', 'Popped next tool from queue', { toolName: pendingToolCall.name, queueSize: pendingToolCallsQueue.length });
+              } else {
+                pendingToolCall = null;
+              }
+            } catch (e) {
+              log('ERROR', 'Failed to parse tool input JSON', { error: String(e), input: inputStr.slice(0, 200) });
+            }
           }
         }
       }
@@ -229,14 +289,14 @@ async function makeApiCall() {
 
     if (!pendingToolCall) {
       log('INFO', 'Stream completed normally', {
-        fullContentLength: fullContent.length,
-        fullContentPreview: fullContent.slice(0, 500),
+        fullContentLength: currentStreamingContent.length,
+        fullContentPreview: currentStreamingContent.slice(0, 500),
         totalMessages: messages.length,
         toolCallsCount: completedToolCalls.length,
       });
 
-      if (fullContent || messages.length > 0) {
-        appendMessage(sessionId, 'assistant', [{ type: 'text', text: fullContent }], undefined, completedToolCalls);
+      if (currentStreamingContent || messages.length > 0) {
+        appendMessage(sessionId, 'assistant', [{ type: 'text', text: currentStreamingContent }], undefined, completedToolCalls);
       }
       updateSessionStatus(sessionId, 'idle', null);
       process.send?.({ type: 'done' });
@@ -251,12 +311,12 @@ async function makeApiCall() {
 async function makeFollowUpCall() {
   const client = new Anthropic({
     apiKey: process.env.MINIMAX_API_KEY,
-    baseURL: process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic/',
+    baseURL: process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic',
   });
 
   let fullContent = '';
 
-  const model = options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7';
+  const model = options.model || process.env.DEFAULT_MODEL || 'MiniMax-M2.7-highspeed';
   const maxTokens = options.maxTokens || 4096;
   const temperature = 1;
   const systemPrompt = options.systemPrompt || '';
@@ -293,10 +353,61 @@ async function makeFollowUpCall() {
         return;
       }
 
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        fullContent += event.delta.text;
-        appendStreamingContent(sessionId, event.delta.text);
-        process.send?.({ type: 'delta', data: event });
+      if (event.type === 'content_block_delta') {
+        if (event.delta.type === 'text_delta') {
+          fullContent += event.delta.text;
+          appendStreamingContent(sessionId, event.delta.text);
+          process.send?.({ type: 'delta', data: event });
+        } else if (event.delta.type === 'input_json_delta') {
+          if (pendingToolCall) {
+            const current = pendingToolInputById.get(pendingToolCall.id) || '';
+            pendingToolInputById.set(pendingToolCall.id, current + (event.delta as any).partial_json);
+          }
+        }
+      } else if (event.type === 'content_block_start') {
+        if ((event as any).content_block?.type === 'tool_use') {
+          const block = (event as any).content_block;
+          if (pendingToolCall || pendingToolCallsQueue.length > 0) {
+            const currentInputStr = pendingToolInputById.get(pendingToolCall?.id || '') || pendingToolCall?.input || '';
+            pendingToolCallsQueue.push({ name: pendingToolCall?.name || '', id: pendingToolCall?.id || '', input: pendingToolCall?.input || '', inputStr: currentInputStr });
+            log('DEBUG', 'Queued pending tool_use block in follow-up, queue size', { queueSize: pendingToolCallsQueue.length });
+          }
+          pendingToolCall = {
+            name: block?.name,
+            id: block?.id,
+            input: '',
+          };
+          pendingToolInputById.set(block?.id, '');
+          log('DEBUG', 'Started tool_use block in follow-up', { toolName: block?.name, toolId: block?.id });
+        }
+      } else if (event.type === 'content_block_stop') {
+        if (pendingToolCall) {
+          const inputStr = pendingToolInputById.get(pendingToolCall.id) || pendingToolCall.input;
+          if (inputStr) {
+            try {
+              const args = JSON.parse(inputStr);
+              const sanitizedArgs = sanitizeArgs(args);
+              log('INFO', 'Emitting tool_call in follow-up to parent', {
+                toolName: pendingToolCall.name,
+                toolId: pendingToolCall.id,
+                args: sanitizedArgs,
+              });
+              process.send?.({ type: 'tool_call', data: { tool: pendingToolCall.name, args } });
+              emittedToolIds.push(pendingToolCall.id);
+              emittedToolNames.set(pendingToolCall.id, pendingToolCall.name);
+              const nextQueued = pendingToolCallsQueue.shift();
+              if (nextQueued) {
+                pendingToolCall = { name: nextQueued.name, id: nextQueued.id, input: '' };
+                pendingToolInputById.set(nextQueued.id, nextQueued.inputStr);
+                log('DEBUG', 'Popped next tool from queue in follow-up', { toolName: pendingToolCall.name, queueSize: pendingToolCallsQueue.length });
+              } else {
+                pendingToolCall = null;
+              }
+            } catch (e) {
+              log('ERROR', 'Failed to parse tool input JSON in follow-up', { error: String(e), input: inputStr.slice(0, 200) });
+            }
+          }
+        }
       }
     }
 
