@@ -7,7 +7,8 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { fsProvider } from './fs-provider.js';
+import { fsProvider, validateBashPath, validateBashCommand } from './fs-provider.js';
+import { configManager } from './config-manager.js';
 
 const execAsync = promisify(exec);
 
@@ -140,7 +141,8 @@ const builtInTools: Map<string, BuiltInTool> = new Map([
   }],
   ['bash', {
     name: 'bash',
-    description: 'Execute a bash command and return the output',
+    description: `Execute a bash command and return the output.
+IMPORTANT: ~ is automatically expanded to home directory. All paths are validated against workspace directories. Paths outside workspace will fail with "Directory does not exist".`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -150,11 +152,66 @@ const builtInTools: Map<string, BuiltInTool> = new Map([
       required: ['command'],
     },
     handler: async (args) => {
+      const cwd = args.cwd || configManager.get('workspace.directories')?.[0] || process.cwd();
+
+      const cwdValidation = validateBashPath(cwd);
+      if (!cwdValidation.valid) {
+        return { content: [{ type: 'text', text: `bash: ${cwdValidation.reason}` }] };
+      }
+
+      const commandValidation = validateBashCommand(args.command, cwd);
+      if (!commandValidation.valid) {
+        return { content: [{ type: 'text', text: `bash: ${commandValidation.reason}` }] };
+      }
+
       try {
-        const { stdout, stderr } = await execAsync(args.command, {
-          cwd: args.cwd || process.cwd(),
+        const encodedCommand = Buffer.from(args.command).toString('base64');
+
+        const getSafeDirs = (): string[] => {
+          const configPath = os.homedir() + '/.yishan-ai/config.json';
+          try {
+            if (fs.existsSync(configPath)) {
+              const content = fs.readFileSync(configPath, 'utf-8');
+              const config = JSON.parse(content);
+              if (config.workspace?.directories) {
+                return config.workspace.directories.map((d: string) => {
+                  if (d.startsWith('~')) return d.replace('~', os.homedir());
+                  return d;
+                }).filter((d: string) => fs.existsSync(d));
+              }
+            }
+          } catch (e) {}
+          return [os.homedir() + '/yishan-workspace'];
+        };
+
+        const safeDirs = getSafeDirs();
+        const volumeMounts = safeDirs.map((d, i) =>
+          `-v "${d}:/workspace${i > 0 ? '/' + path.basename(d) : ''}:rw"`
+        ).join(' ');
+
+        const dockerCmd = `docker run --rm ` +
+          `--user $(id -u):$(id -g) ` +
+          `--group-add $(id -g) ` +
+          `--cap-drop ALL ` +
+          `--security-opt=no-new-privileges ` +
+          `--security-opt seccomp=${os.homedir()}/.yishan-ai/isolated/seccomp.json ` +
+          `--read-only ` +
+          `--memory=512m --memory-swap=512m ` +
+          `--pids-limit=64 ` +
+          `--ulimit nofile=1024:1024 ` +
+          `--env HOME=/workspace ` +
+          `--env TERM=xterm-256color ` +
+          `--tmpfs /tmp:rw,noexec,nosuid,size=64m ` +
+          `--tmpfs /var/run:rw,noexec,nosuid,size=8m ` +
+          `--entrypoint /bin/bash ` +
+          `${volumeMounts} ` +
+          `isolated -c 'echo ${encodedCommand} | base64 -d | /bin/bash'`;
+
+        const { stdout, stderr } = await execAsync(dockerCmd, {
+          cwd: cwd,
           timeout: 60000,
         });
+
         let output = stdout.replace(/[\x1b\x9b][\(]?[0-?]*[ -/]*[@-~]/g, '');
         output = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
         if (stderr) {

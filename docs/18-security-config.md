@@ -111,6 +111,8 @@
 | `tools.fs.workspaceOnly` | boolean | `true` | 限制在 workspace 内操作 |
 | `tools.exec.security` | string | `ask` | 执行安全级别: `allow`, `ask`, `deny` |
 
+> **注意**: bash 命令始终在 Docker 容器内执行，详见 [19-container-isolation.md](./19-container-isolation.md)。
+
 #### 日志配置 (logging)
 
 | 配置项 | 类型 | 默认值 | 说明 |

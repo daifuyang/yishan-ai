@@ -1,10 +1,106 @@
 import fs from 'fs-extra';
 import path from 'node:path';
+import os from 'node:os';
 import { globby } from 'globby';
 import * as Diff from 'diff';
 import { configManager } from './config-manager.js';
 
 const PROTECTED_PATHS = ['/etc', '/root', '/.ssh', '/proc', '/sys'];
+const DANGEROUS_PATTERNS = [
+  /\/etc[\/\s]/,
+  /\/root[\/\s]/,
+  /\/\.ssh[\/\s]/,
+  /\/proc[\/\s]/,
+  /\/sys[\/\s]/,
+];
+
+function isDangerousPath(p: string): boolean {
+  for (const regex of DANGEROUS_PATTERNS) {
+    if (regex.test(p)) return true;
+  }
+  return false;
+}
+
+function isWithinWorkspace(p: string): boolean {
+  const config = configManager.getAll();
+  const workspaceDirs = config.workspace?.directories ?? [];
+  if (workspaceDirs.length === 0) return true;
+
+  const normalized = path.resolve(p);
+  return workspaceDirs.some(dir => {
+    const resolvedDir = path.resolve(dir);
+    return normalized.startsWith(resolvedDir) || normalized === resolvedDir;
+  });
+}
+
+function expandVariables(command: string): { expanded: string; error?: string } {
+  let expanded = command;
+
+  const varRegex = /\$\{([^}]+)\}|\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  let match;
+  while ((match = varRegex.exec(expanded)) !== null) {
+    const varName = match[1] || match[2];
+    const varValue = process.env[varName];
+    if (varValue === undefined) {
+      return { expanded: command, error: `undefined variable: ${match[0]}` };
+    }
+    expanded = expanded.replace(match[0], varValue);
+  }
+
+  return { expanded };
+}
+
+function extractAbsolutePaths(command: string): string[] {
+  const paths: string[] = [];
+  const regex = /\/[^\s\'\"\\|;&$#*?]+/g;
+  let match;
+  while ((match = regex.exec(command)) !== null) {
+    const p = match[0];
+    if (p.startsWith('//')) continue;
+    paths.push(p);
+  }
+  return paths;
+}
+
+export function validateBashPath(requestedPath: string): ValidationResult {
+  const normalized = path.resolve(requestedPath);
+
+  if (!isWithinWorkspace(normalized)) {
+    return { valid: false, reason: 'Directory does not exist' };
+  }
+
+  if (isDangerousPath(normalized)) {
+    return { valid: false, reason: 'Directory does not exist' };
+  }
+
+  return { valid: true };
+}
+
+export function validateBashCommand(command: string, cwd: string): ValidationResult {
+  const expandResult = expandVariables(command);
+  if (expandResult.error) {
+    return { valid: false, reason: 'Directory does not exist' };
+  }
+
+  const paths = extractAbsolutePaths(expandResult.expanded);
+  if (paths.length === 0) {
+    return { valid: true };
+  }
+
+  for (const p of paths) {
+    const resolved = path.resolve(cwd, p);
+
+    if (!isWithinWorkspace(resolved)) {
+      return { valid: false, reason: 'Directory does not exist' };
+    }
+
+    if (isDangerousPath(resolved)) {
+      return { valid: false, reason: 'Directory does not exist' };
+    }
+  }
+
+  return { valid: true };
+}
 
 export interface ValidationResult {
   valid: boolean;
@@ -23,14 +119,14 @@ export function validatePath(requestedPath: string): ValidationResult {
         return normalized.startsWith(resolvedDir) || normalized === resolvedDir;
       });
       if (!isWithinWorkspace) {
-        return { valid: false, reason: 'Path is outside allowed workspace directories' };
+        return { valid: false, reason: 'Directory does not exist' };
       }
     }
   }
 
   for (const protectedPath of PROTECTED_PATHS) {
     if (normalized.startsWith(protectedPath)) {
-      return { valid: false, reason: `Path is within protected system directory: ${protectedPath}` };
+      return { valid: false, reason: 'Directory does not exist' };
     }
   }
 

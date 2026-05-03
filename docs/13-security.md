@@ -9,3 +9,6 @@
 | 环境隔离 | `.env.example` 仅含变量名，不含实际值 |
 | 依赖安全 | `pnpm audit` 定期检查依赖漏洞 |
 | 进程隔离 | PM2 管理，OOM 自动重启 (max_memory_restart: 512M) |
+| **容器隔离** | Docker 容器执行 bash，根文件系统只读，seccomp 白名单 |
+
+详见 [19-container-isolation.md](./19-container-isolation.md)。
