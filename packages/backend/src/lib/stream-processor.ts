@@ -198,6 +198,8 @@ class StreamProcessor extends EventEmitter {
           orderBy: { createdAt: 'asc' },
         });
 
+        log?.info('ROUND_START', `Round ${round} started with ${messages.length} messages`, { round, messageCount: messages.length });
+
         const formattedMessages: any[] = [];
         for (const m of messages) {
           let content;
@@ -261,8 +263,15 @@ class StreamProcessor extends EventEmitter {
         }
 
         if (round >= 2) {
-          console.log(`[DEBUG] Round ${round} messages:`, JSON.stringify(formattedMessages, null, 2).slice(0, 2000));
+          log?.info('ROUND_DEBUG', `Round ${round} has ${formattedMessages.length} messages`, { round, messageCount: formattedMessages.length });
         }
+
+        log?.info('ROUND_API_REQUEST', `Round ${round} sending ${formattedMessages.length} messages`, {
+          round,
+          model,
+          messageCount: formattedMessages.length,
+          firstMessage: formattedMessages[0] ? (typeof formattedMessages[0].content === 'string' ? formattedMessages[0].content.slice(0, 100) : JSON.stringify(formattedMessages[0].content).slice(0, 100)) : null,
+        });
 
         const stream = client.messages.stream({
           model,
@@ -278,6 +287,7 @@ class StreamProcessor extends EventEmitter {
         let pendingToolInputById: Map<string, string> = new Map();
         let pendingAssistantContent = '';
         let hasToolCallsInThisRound = false;
+        log?.info('ROUND_VARS', `Round ${round} hasToolCallsInThisRound=${hasToolCallsInThisRound}`, { round, hasToolCallsInThisRound });
 
         // @ts-ignore - TypeScript doesn't track assignments inside async generator
         log?.debug('AI_CLIENT', 'Request', {
@@ -327,24 +337,48 @@ class StreamProcessor extends EventEmitter {
                 pendingToolCall = { name: block?.name, id: block?.id, input: '' };
                 pendingToolInputById.set(block?.id, '');
                 hasToolCallsInThisRound = true;
+                log?.info('TOOL_CALL_DETECTED', `Round ${round} detected tool_call: ${block?.name}`, { round, toolName: block?.name, toolId: block?.id });
               }
             } else if (event.type === 'message_stop') {
               inputTokens = (event as any).usage?.input_tokens || 0;
               outputTokens = (event as any).usage?.output_tokens || 0;
               stopReason = (event as any).stop_reason || '';
+              log?.info('MESSAGE_STOP', `Round ${round} stopReason=${stopReason}`, { round, stopReason, inputTokens, outputTokens });
             } else if (event.type === 'content_block_stop') {
+              log?.info('CBS', `Round ${round} content_block_stop, pendingTC=${pendingToolCall?.name || 'null'}`, { round, pendingTCName: pendingToolCall?.name, pendingTCId: pendingToolCall?.id, mapSize: pendingToolInputById.size });
               if (pendingToolCall) {
+                log?.info('CBS_ENTER', `Round ${round} entering block`, { round });
                 const inputStr = pendingToolInputById.get(pendingToolCall.id) || pendingToolCall.input;
+                log?.info('CBS_INPUT', `Round ${round} inputLen=${inputStr?.length}`, { round, inputLen: inputStr?.length, inputPreview: inputStr?.slice(0, 100) });
+                if (!inputStr) {
+                  log?.info('CBS_SKIP', `Round ${round} inputStr empty`, { round });
+                }
                 if (inputStr) {
+                  log?.info('CBS_PARSE', `Round ${round} parsing JSON`, { round });
                   try {
                     const args = JSON.parse(inputStr);
+                    log?.info('CBS_CALL', `Round ${round} calling ${pendingToolCall.name}`, { round, toolName: pendingToolCall.name, args });
 
                     this.broadcast(sessionId, 'tool_call', { tool: pendingToolCall.name, args });
 
-                    const result = await this.callTool(pendingToolCall.name, args);
+                    const toolName = pendingToolCall.name;
+                    const toolId = pendingToolCall.id;
+                    log?.info('CBS_AWAIT', `Round ${round} before await`, { round, toolName });
+
+                    let result;
+                    let toolError: string | undefined;
+                    try {
+                      result = await this.callTool(toolName, args);
+                      log?.info('CBS_RESULT', `Round ${round} got result`, { round, resultType: typeof result });
+                    } catch (toolErr: any) {
+                      log?.error('CBS_TOOL_ERR', `Round ${round} tool call failed: ${toolErr.message}`, toolErr);
+                      toolError = toolErr.message;
+                    }
 
                     let content: string;
-                    if (typeof result === 'string') {
+                    if (toolError) {
+                      content = toolError;
+                    } else if (typeof result === 'string') {
                       content = result;
                     } else if (result.content && Array.isArray(result.content)) {
                       content = result.content.map((block: any) => {
@@ -358,16 +392,17 @@ class StreamProcessor extends EventEmitter {
                       content = JSON.stringify(result);
                     }
 
-                    const isError = content.startsWith('Error:');
+                    const isError = content.startsWith('Error:') || !!toolError;
                     this.broadcast(sessionId, isError ? 'tool_error' : 'tool_result', { result: content });
 
                     currentToolCall = {
-                      id: pendingToolCall.id,
-                      name: pendingToolCall.name,
+                      id: toolId,
+                      name: toolName,
                       input: args,
                       result: isError ? undefined : content,
                       error: isError ? content : undefined,
                     };
+                    log?.info('CBS_CURRENT', `Round ${round} currentToolCall set isError=${isError}`, { round, hasCurrentToolCall: !!currentToolCall, isError });
 
                     const nextQueued = pendingToolCallsQueue.shift();
                     if (nextQueued) {
@@ -376,9 +411,8 @@ class StreamProcessor extends EventEmitter {
                     } else {
                       pendingToolCall = null;
                     }
-                  } catch (e: any) {
-                    console.error(`[STREAM_PROC] Tool call failed: ${e.message}`);
-                    pendingToolCall = null;
+                  } catch (parseErr: any) {
+                    log?.error('CBS_PARSE_ERR', `Round ${round} JSON parse error: ${parseErr.message}`, parseErr);
                   }
                 }
               }
@@ -397,6 +431,8 @@ class StreamProcessor extends EventEmitter {
           currentToolCall = null;
         }
 
+        log?.info('BREAK_CHECK', `Round ${round} hasToolCalls=${hasToolCallsInThisRound} contentLen=${pendingAssistantContent.length}`, { round, hasToolCallsInThisRound, pendingContentLength: pendingAssistantContent.length });
+
         if (!hasToolCallsInThisRound) {
           finalAssistantContent = pendingAssistantContent;
           if (pendingAssistantContent) {
@@ -408,8 +444,12 @@ class StreamProcessor extends EventEmitter {
                 type: 'final',
                 content: pendingAssistantContent,
               },
-            }).catch((e) => log?.error('STREAM_DEBUG', `Failed to save final assistant text: ${e.message}`));
+            }).catch((e) => {
+              console.error('[DB_ERROR] Failed to save final assistant text:', e.message);
+              log?.error('DB_SAVE_FAILED', `Failed to save final assistant text: ${e.message}`, e);
+            });
           }
+          log?.info('LOOP_EXIT', `Round ${round} exiting loop - no tool calls`, { round, reason: 'no tool calls' });
           break;
         }
 
@@ -438,7 +478,10 @@ class StreamProcessor extends EventEmitter {
               type: 'final',
               content: JSON.stringify(toolUseBlocks),
             },
-          }).catch((e) => log?.error('STREAM_DEBUG', `Failed to save assistant message: ${e.message}`));
+          }).catch((e) => {
+            console.error('[DB_ERROR] Failed to save assistant message:', e.message);
+            log?.error('DB_SAVE_FAILED', `Failed to save assistant message: ${e.message}`, e);
+          });
 
           await prisma.message.create({
             data: {
@@ -448,7 +491,10 @@ class StreamProcessor extends EventEmitter {
               type: 'tool_result',
               content: JSON.stringify(toolResultBlocks),
             },
-          }).catch((e) => log?.error('STREAM_DEBUG', `Failed to save tool result message: ${e.message}`));
+          }).catch((e) => {
+            console.error('[DB_ERROR] Failed to save tool result message:', e.message);
+            log?.error('DB_SAVE_FAILED', `Failed to save tool result message: ${e.message}`, e);
+          });
         }
 
         pendingAssistantContent = '';
