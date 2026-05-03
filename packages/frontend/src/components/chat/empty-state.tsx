@@ -16,9 +16,10 @@ interface EmptyStateProps {
   isStreaming: boolean;
   disabled?: boolean;
   defaultModel?: string;
+  initialContent?: string;
 }
 
-export function EmptyState({ onSend, onStop, isStreaming, disabled, defaultModel }: EmptyStateProps) {
+export function EmptyState({ onSend, onStop, isStreaming, disabled, defaultModel, initialContent }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 animate-fade-in-up">
       <div className="text-center space-y-1">
@@ -32,6 +33,7 @@ export function EmptyState({ onSend, onStop, isStreaming, disabled, defaultModel
           isStreaming={isStreaming}
           disabled={disabled}
           defaultModel={defaultModel}
+          initialContent={initialContent}
         />
       </div>
     </div>

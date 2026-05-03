@@ -1,5 +1,6 @@
 import './globals.scss';
 import type { Metadata } from 'next';
+import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
   title: 'Yishan AI',
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="zh">
       <body className="antialiased">
         {children}
+        <Toaster position="top-right" />
       </body>
     </html>
   );

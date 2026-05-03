@@ -33,12 +33,14 @@ interface ChatStore {
   isStreaming: boolean;
   streamingContent: string;
   currentEventSource: EventSource | null;
+  errorMessage: string | null;
   fetchMessages: (sessionId: string) => Promise<void>;
   sendMessage: (sessionId: string, content: string, model: string, mode?: 'plan' | 'build') => Promise<void>;
   subscribe: (sessionId: string) => void;
   unsubscribe: () => void;
   stopStream: (sessionId: string) => Promise<void>;
   clearMessages: () => void;
+  clearError: () => void;
   rollbackMessage: (sessionId: string, messageId: string) => Promise<string | null>;
 }
 
@@ -49,6 +51,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isStreaming: false,
   streamingContent: '',
   currentEventSource: null,
+  errorMessage: null,
 
   fetchMessages: async (sessionId) => {
     const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`);
@@ -101,7 +104,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   sendMessage: async (sessionId, content, model, mode) => {
     const tempId = crypto.randomUUID();
-    set({ isStreaming: true, streamingContent: '', messages: [
+    set({ isStreaming: true, streamingContent: '', errorMessage: null, messages: [
       ...get().messages,
       { id: tempId, role: 'user', type: 'user', content }
     ]});
@@ -111,10 +114,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       existingSource.close();
     }
 
+    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, model, mode }),
+    });
+    const resData = await res.json();
+
+    if (resData.messageId) {
+      set((state) => ({
+        messages: state.messages.map((msg) =>
+          msg.id === tempId ? { ...msg, id: resData.messageId } : msg
+        ),
+      }));
+    }
+
     const eventSource = new EventSource(`${API_BASE}/api/sessions/${sessionId}/chat/subscribe`);
     set({ currentEventSource: eventSource });
-
-    let onMessageHandler: ((event: MessageEvent) => void) | null = null;
 
     const messageHandler = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
@@ -220,7 +236,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         });
         eventSource.close();
       } else if (data.type === 'error') {
-        set({ isStreaming: false, streamingContent: '', currentEventSource: null });
+        set({ isStreaming: false, streamingContent: '', currentEventSource: null, errorMessage: data.message || '发生未知错误' });
         eventSource.close();
       }
     };
@@ -231,27 +247,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       eventSource.close();
       set({ isStreaming: false, currentEventSource: null });
     };
-
-    await new Promise<void>((resolve) => {
-      eventSource.onopen = () => {
-        setTimeout(resolve, 50);
-      };
-    });
-
-    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, model, mode }),
-    });
-    const data = await res.json();
-
-    if (data.messageId) {
-      set((state) => ({
-        messages: state.messages.map((msg) =>
-          msg.id === tempId ? { ...msg, id: data.messageId } : msg
-        ),
-      }));
-    }
   },
 
   subscribe: (sessionId) => {
@@ -363,14 +358,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         });
         eventSource.close();
       } else if (data.type === 'error') {
-        set({ isStreaming: false, streamingContent: '', currentEventSource: null });
+        set({ isStreaming: false, streamingContent: '', currentEventSource: null, errorMessage: data.message || '发生未知错误' });
         eventSource.close();
       }
     };
 
     eventSource.onerror = () => {
-      eventSource.close();
-      set({ isStreaming: false, streamingContent: '', currentEventSource: null });
+      const currentError = get().errorMessage;
+      if (!currentError) {
+        set({ isStreaming: false, streamingContent: '', currentEventSource: null, errorMessage: '连接已断开，请重试' });
+      } else {
+        set({ isStreaming: false, streamingContent: '', currentEventSource: null });
+      }
     };
   },
 
@@ -378,8 +377,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const eventSource = get().currentEventSource;
     if (eventSource) {
       eventSource.close();
-      set({ currentEventSource: null, isStreaming: false, streamingContent: '' });
+      set({ currentEventSource: null, isStreaming: false, streamingContent: '', errorMessage: null });
     }
+  },
+
+  clearError: () => {
+    set({ errorMessage: null });
   },
 
   stopStream: async (sessionId) => {

@@ -11,16 +11,24 @@ import { useConfigStore } from "@/stores/config-store";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { EmptyState } from "@/components/chat/empty-state";
+import { toast } from "sonner";
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { sessions, createSession, fetchSessions } = useSessionStore();
-  const { messages, isStreaming, streamingContent, fetchMessages, sendMessage, stopStream, clearMessages, rollbackMessage } = useChatStore();
+  const { messages, isStreaming, streamingContent, errorMessage, fetchMessages, sendMessage, stopStream, clearMessages, rollbackMessage, clearError } = useChatStore();
   const { fetchConfig } = useConfigStore();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rollbackContent, setRollbackContent] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (errorMessage) {
+      toast.error(errorMessage);
+      clearError();
+    }
+  }, [errorMessage, clearError]);
 
   useEffect(() => {
     fetchConfig();
@@ -110,6 +118,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
             isStreaming={isStreaming}
             disabled={isCreating}
             defaultModel={session?.model}
+            initialContent={rollbackContent}
           />
         </div>
       )}

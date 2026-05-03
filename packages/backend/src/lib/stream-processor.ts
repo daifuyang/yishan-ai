@@ -3,6 +3,7 @@ import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { getLogger } from './logger.js';
 import { configManager } from './config-manager.js';
+import { autoTitle } from '../stores/session-store.js';
 
 const dbUrl = process.env.DATABASE_URL || `file:${configManager.get<string>('data.dir')}`;
 const adapter = new PrismaLibSql({ url: dbUrl });
@@ -77,6 +78,8 @@ class StreamProcessor extends EventEmitter {
       },
     });
 
+    await autoTitle(sessionId, userMessage);
+
     await prisma.session.update({
       where: { id: sessionId },
       data: { status: 'streaming', streamingContent: '' },
@@ -84,6 +87,15 @@ class StreamProcessor extends EventEmitter {
 
     this.processTask(sessionId, systemPrompt, tools, abortController.signal).catch((err) => {
       console.error(`[STREAM_PROC] Task ${sessionId} failed:`, err.message);
+      let errorMessage = err.message;
+      if (errorMessage.includes('Could not resolve authentication') || errorMessage.includes('apiKey')) {
+        errorMessage = 'API 认证失败，请检查设置中的 API Key 是否正确';
+      } else if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('ENOTFOUND')) {
+        errorMessage = '网络请求失败，请检查网络连接';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = '请求超时，请重试';
+      }
+      this.broadcast(sessionId, 'error', errorMessage);
     });
 
     return { messageId, queued: false };
@@ -481,14 +493,24 @@ class StreamProcessor extends EventEmitter {
     } catch (err: any) {
       if (err.name === 'AbortError' || signal.aborted) {
         console.log(`[STREAM_PROC] Session ${sessionId} cancelled`);
-        this.broadcast(sessionId, 'error', 'Task cancelled');
+        this.broadcast(sessionId, 'error', '任务已取消');
       } else {
         console.error(`[STREAM_PROC] Session ${sessionId} failed:`, err);
+
+        let errorMessage = err.message;
+        if (errorMessage.includes('Could not resolve authentication') || errorMessage.includes('apiKey')) {
+          errorMessage = 'API 认证失败，请检查设置中的 API Key 是否正确';
+        } else if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('ENOTFOUND')) {
+          errorMessage = '网络请求失败，请检查网络连接';
+        } else if (errorMessage.includes('timeout')) {
+          errorMessage = '请求超时，请重试';
+        }
+
         await prisma.session.update({
           where: { id: sessionId },
           data: { status: 'failed', streamingContent: null },
         }).catch(() => {});
-        this.broadcast(sessionId, 'error', err.message);
+        this.broadcast(sessionId, 'error', errorMessage);
       }
     } finally {
       this.runningTasks.delete(sessionId);
