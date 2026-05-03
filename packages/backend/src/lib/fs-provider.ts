@@ -1,6 +1,5 @@
 import fs from 'fs-extra';
 import path from 'node:path';
-import os from 'node:os';
 import { globby } from 'globby';
 import * as Diff from 'diff';
 import { configManager } from './config-manager.js';

@@ -7,7 +7,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { fsProvider, validateBashPath, validateBashCommand } from './fs-provider.js';
+import { validateBashPath, validateBashCommand } from './fs-provider.js';
 import { configManager } from './config-manager.js';
 
 const execAsync = promisify(exec);
@@ -33,112 +33,6 @@ interface BuiltInTool {
 }
 
 const builtInTools: Map<string, BuiltInTool> = new Map([
-  ['read_file', {
-    name: 'read_file',
-    description: 'Read the complete contents of a file as text',
-    inputSchema: {
-      type: 'object',
-      properties: { path: { type: 'string' } },
-      required: ['path'],
-    },
-    handler: async (args) => {
-      const result = await fsProvider.read_file(args.path);
-      if (result.error) throw new Error(result.error);
-      return { content: [{ type: 'text', text: result.content }] };
-    },
-  }],
-  ['write_file', {
-    name: 'write_file',
-    description: 'Create a new file or overwrite an existing file',
-    inputSchema: {
-      type: 'object',
-      properties: { path: { type: 'string' }, content: { type: 'string' } },
-      required: ['path', 'content'],
-    },
-    handler: async (args) => {
-      const result = await fsProvider.write_file(args.path, args.content);
-      if (result.error) throw new Error(result.error);
-      return { content: [{ type: 'text', text: `File written: ${args.path}` }] };
-    },
-  }],
-  ['edit_file', {
-    name: 'edit_file',
-    description: 'Edit a file by replacing exact text',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string' },
-        old_string: { type: 'string' },
-        new_string: { type: 'string' },
-      },
-      required: ['path', 'old_string', 'new_string'],
-    },
-    handler: async (args) => {
-      const result = await fsProvider.edit_file(args.path, args.old_string, args.new_string);
-      if (result.error) throw new Error(result.error);
-      return { content: [{ type: 'text', text: `Edited: ${args.path}` }] };
-    },
-  }],
-  ['delete_file', {
-    name: 'delete_file',
-    description: 'Delete a file',
-    inputSchema: {
-      type: 'object',
-      properties: { path: { type: 'string' } },
-      required: ['path'],
-    },
-    handler: async (args) => {
-      const result = await fsProvider.delete_file(args.path);
-      if (result.error) throw new Error(result.error);
-      return { content: [{ type: 'text', text: `Deleted: ${args.path}` }] };
-    },
-  }],
-  ['list_directory', {
-    name: 'list_directory',
-    description: 'List all files and directories in a path',
-    inputSchema: {
-      type: 'object',
-      properties: { path: { type: 'string' } },
-      required: ['path'],
-    },
-    handler: async (args) => {
-      const result = await fsProvider.list_directory(args.path);
-      if (result.error) throw new Error(result.error);
-      const entries = result.entries.map(e => {
-        const name = path.basename(e);
-        return fs.existsSync(e) && fs.statSync(e).isDirectory() ? `[DIR] ${name}` : `[FILE] ${name}`;
-      }).join('\n');
-      return { content: [{ type: 'text', text: entries || '(empty)' }] };
-    },
-  }],
-  ['search_files', {
-    name: 'search_files',
-    description: 'Search for files matching a glob pattern',
-    inputSchema: {
-      type: 'object',
-      properties: { path: { type: 'string' }, pattern: { type: 'string' } },
-      required: ['path', 'pattern'],
-    },
-    handler: async (args) => {
-      const result = await fsProvider.search_files(args.pattern, { cwd: args.path });
-      if (result.error) throw new Error(result.error);
-      return { content: [{ type: 'text', text: result.files.join('\n') || '(no matches)' }] };
-    },
-  }],
-  ['diff_files', {
-    name: 'diff_files',
-    description: 'Compare two files and show differences',
-    inputSchema: {
-      type: 'object',
-      properties: { file1: { type: 'string' }, file2: { type: 'string' } },
-      required: ['file1', 'file2'],
-    },
-    handler: async (args) => {
-      const result = await fsProvider.diff_files(args.file1, args.file2);
-      if (result.error) throw new Error(result.error);
-      return { content: [{ type: 'text', text: result.diff || '(no differences)' }] };
-    },
-  }],
   ['bash', {
     name: 'bash',
     description: `Execute a bash command and return the output.
