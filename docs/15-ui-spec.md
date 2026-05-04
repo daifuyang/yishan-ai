@@ -213,6 +213,134 @@ function FloatingExpandIcon() {
 └──────────────┘                    └──────────────┘ └──────────┘
 ```
 
+### 15.4.1 滚动定位按钮
+
+在聊天页面底部栏添加"滚动到顶部"和"滚动到底部"图标按钮。
+
+```
+位置示意：
+┌─────────────────────────────────────────────────────────────────┐
+│  ...                                                         ↑ │
+│  ...                                                         │ │
+│  ...                                                    [按钮区]│
+│  ...                                                         │ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 显示逻辑
+
+| 位置 | 上方按钮 | 下方按钮 |
+|-----|---------|---------|
+| 最上方 | 不显示 | ArrowDown |
+| 最下方 | 不显示 | ArrowUp |
+| 中间 | ArrowUp | ArrowDown |
+
+#### 核心规则
+
+1. **下方按钮根据位置显示不同图标**：
+   - 在顶部时（isNearTop）：显示 ArrowDown，点击滚动到底部
+   - 在底部时（isNearBottom）：显示 ArrowUp，点击滚动到顶部
+   - 在中间时：显示 ArrowDown，点击滚动到底部
+
+2. **上方按钮只在中间位置显示**：
+   - 只在 `!isNearTop && !isNearBottom` 时显示
+   - 始终显示 ArrowUp，点击滚动到顶部
+
+3. **无滚动条时不显示按钮**：
+   - 当 `scrollHeight <= clientHeight` 时，不渲染按钮容器
+
+#### 实现方式
+
+滚动状态通过 `window.scroll` 事件监听，使用 `window.scrollTo()` 进行滚动：
+
+```typescript
+const [scrollState, setScrollState] = useState({
+  isNearTop: true,
+  isNearBottom: false,
+  canScroll: false,
+});
+
+// 滚动状态检测
+useEffect(() => {
+  const updateScrollState = () => {
+    const scrollY = window.scrollY;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = window.innerHeight;
+    const distanceFromBottom = scrollHeight - scrollY - clientHeight;
+
+    setScrollState({
+      isNearTop: scrollY < 100,
+      isNearBottom: distanceFromBottom < 100,
+      canScroll: scrollHeight > clientHeight,
+    });
+  };
+
+  window.addEventListener('scroll', updateScrollState, { passive: true });
+  updateScrollState();
+  return () => window.removeEventListener('scroll', updateScrollState);
+}, []);
+```
+
+#### 按钮布局
+
+```tsx
+{scrollState.canScroll && (
+  <div className="absolute w-full top-0 max-w-3xl">
+    <div className="absolute bottom-4 right-0 flex flex-col gap-2">
+      {/* 上方按钮 - 只在中间显示 */}
+      {showTopButton && (
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="h-8 w-8 bg-background/95 backdrop-blur shadow-sm"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </Button>
+      )}
+
+      {/* 下方按钮 - 根据位置变图标 */}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => scrollState.isNearBottom
+          ? window.scrollTo({ top: 0, behavior: 'smooth' })
+          : window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}
+        className="h-8 w-8 bg-background/95 backdrop-blur shadow-sm"
+      >
+        {scrollState.isNearBottom ? (
+          <ArrowUp className="h-4 w-4" />
+        ) : (
+          <ArrowDown className="h-4 w-4" />
+        )}
+      </Button>
+    </div>
+  </div>
+)}
+```
+
+#### 自动滚动
+
+消息变化时自动滚动到底部：
+
+```typescript
+// 消息增加时滚动
+const prevMessagesLength = useRef(messages.length);
+useEffect(() => {
+  if (messages.length > 0 && messages.length !== prevMessagesLength.current) {
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+  }
+  prevMessagesLength.current = messages.length;
+}, [messages]);
+
+// 流式输出时跟随滚动
+useEffect(() => {
+  if (isStreaming && scrollState.isNearBottom) {
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+  }
+}, [isStreaming, scrollState.isNearBottom]);
+```
+
 ## 15.5 shadcn 组件映射表
 
 ### 全局布局
