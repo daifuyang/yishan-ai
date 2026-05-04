@@ -54,7 +54,7 @@ export const UpdateSessionSchema = z.object({
 export const SendMessageSchema = z.object({
   content: z.union([z.string(), z.array(z.any())]),
   model: z.string().optional(),
-  mode: z.enum(['plan', 'build']).optional(),
+  mode: z.enum(['plan', 'build']).default('build'),
 });
 
 export const SSEEventSchema = z.object({

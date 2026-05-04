@@ -413,6 +413,25 @@ class StreamProcessor extends EventEmitter {
                     }
                   } catch (parseErr: any) {
                     log?.error('CBS_PARSE_ERR', `Round ${round} JSON parse error: ${parseErr.message}`, parseErr);
+                    const errorContent = `JSON parse error: ${parseErr.message}`;
+                    this.broadcast(sessionId, 'tool_error', { result: errorContent });
+                    const failedToolCall = pendingToolCall!;
+                    currentToolCall = {
+                      id: failedToolCall.id,
+                      name: failedToolCall.name,
+                      input: { _raw: inputStr },
+                      result: undefined,
+                      error: errorContent,
+                    };
+                    log?.info('CBS_CURRENT', `Round ${round} currentToolCall set isError=true (parse failed)`, { round, hasCurrentToolCall: !!currentToolCall, isError: true });
+
+                    const nextQueued = pendingToolCallsQueue.shift();
+                    if (nextQueued) {
+                      pendingToolCall = { name: nextQueued.name, id: nextQueued.id, input: '' };
+                      pendingToolInputById.set(nextQueued.id, nextQueued.inputStr);
+                    } else {
+                      pendingToolCall = null;
+                    }
                   }
                 }
               }

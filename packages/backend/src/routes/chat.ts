@@ -4,8 +4,14 @@ import { streamProcessor, prisma } from '../lib/stream-processor.js';
 import { getMcpManager, MCPTool, MCPServer } from '../lib/mcp-manager.js';
 import { getSkillManager, Skill } from '../lib/skill-manager.js';
 import { createLogger, closeLogger } from '../lib/logger.js';
+import { configManager } from '../lib/config-manager.js';
 
-function generateSystemPrompt(tools: MCPTool[], servers: MCPServer[], skills: Skill[]): string {
+function getDockerWorkspacePaths(): string[] {
+  const config = configManager.getAll();
+  return config.workspace?.directories || [];
+}
+
+function generateSystemPrompt(tools: MCPTool[], servers: MCPServer[], skills: Skill[], mode: 'plan' | 'build' = 'build', dockerPaths: string[] = []): string {
   const toolList = tools.map(t => `  - ${t.name}: ${t.description}`).join('\n');
 
   const skillSection = skills.length > 0
@@ -30,7 +36,7 @@ MiniMax CLI (mmx) - 当用户请求以下内容时，可使用 mmx 命令：
 
 生成的文件保存在 minimax-output/ 文件夹中`;
 
-return `你是【移山】——一个全能的个人 AI 助手。
+  const basePrompt = `你是【移山】——一个全能的个人 AI 助手。
 
 【核心能力】
 你整合了多种工具来全方位协助用户：
@@ -40,6 +46,7 @@ return `你是【移山】——一个全能的个人 AI 助手。
 - 🖼️ 内容理解：分析图片、文档等视觉内容
 - 📅 飞书集成：日历、文档、审批、通讯录等飞书全家桶
 - 🎨 创意生成：视频，音乐、语音、图片、文本创作
+- 🔍 本地预览：生成文件后可提供预览链接 /preview?type=md&path=文件路径
 
 【工作原则】
 1. 优先使用工具而非空谈：需要实际操作时，直接调用合适的工具
@@ -64,19 +71,55 @@ ${toolList || '无工具可用'}
 ${skillSection}
 
 【创意生成 (mmx)】
-${mmxSection}`;
+${mmxSection}
+
+【本地预览 (preview)】
+当用户需要预览生成的内容、或查看本地 Markdown 文件时，可提供预览链接：
+- Docker 容器内路径示例：${dockerPaths[0] || '/path/to/workspace'}/output/result.md
+- 预览链接转换：直接使用文件在 Docker 内的完整路径
+  示例：${dockerPaths[0] || '/path/to/workspace'}/output/result.md → /preview?type=md&path=${dockerPaths[0] ? dockerPaths[0].split('/').pop() : 'workspace'}/output/result.md
+- 多个 workspace 目录时：使用对应的目录路径
+  示例：${dockerPaths.map(p => p + '/xxx').join(' 或 ')}`;
+
+  if (mode === 'plan') {
+    return `${basePrompt}
+
+---
+
+## 【Plan Mode - 只读规划模式】
+
+CRITICAL: You are in READ-ONLY phase. STRICTLY FORBIDDEN:
+- ANY file edits, modifications, or system changes
+- Do NOT use commands that modify files: sed, tee, echo, write, edit, rm (except for inspection)
+- Do NOT create or delete any files
+- You may ONLY: read files, search code, analyze problems, and construct plans
+
+Your responsibility: Think, read, search, and construct a well-formed plan.
+Ask clarifying questions when weighing tradeoffs. Present your plan to the user clearly.
+When the user says "/build" or switches to build mode, you may then execute changes.`;
+  }
+
+  return `${basePrompt}
+
+---
+
+## 【Build Mode】
+
+You are now in build mode. You may execute all tools to complete the user's task.
+After completing the requested changes, ask if the user is satisfied or needs adjustments.`;
 }
 
 const SendMessageSchema = z.object({
   content: z.union([z.string(), z.array(z.any())]),
   model: z.string().optional(),
+  mode: z.enum(['plan', 'build']).default('build'),
 });
 
 const chatRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/api/sessions/:id/chat/stream', async (request: any, reply: any) => {
     const { id } = request.params;
     const body = SendMessageSchema.parse(request.body);
-    const { content, model } = body;
+    const { content, model, mode } = body;
 
     const log = createLogger(id);
 
@@ -98,7 +141,8 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
     const connectedServers = mcpManager.getServers().filter((s: MCPServer) => s.status === 'connected');
     const skillManager = getSkillManager();
     const enabledSkills = await skillManager.getEnabledSkills();
-    const systemPrompt = generateSystemPrompt(mcpTools, connectedServers, enabledSkills);
+    const dockerPaths = getDockerWorkspacePaths();
+    const systemPrompt = generateSystemPrompt(mcpTools, connectedServers, enabledSkills, mode, dockerPaths);
 
     const userMessage = typeof content === 'string' ? content : JSON.stringify(content);
 

@@ -7,7 +7,6 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateBashPath, validateBashCommand } from './fs-provider.js';
 import { configManager } from './config-manager.js';
 
 const execAsync = promisify(exec);
@@ -48,16 +47,6 @@ IMPORTANT: ~ is automatically expanded to home directory. All paths are validate
     handler: async (args) => {
       const cwd = args.cwd || configManager.get('workspace.directories')?.[0] || process.cwd();
 
-      const cwdValidation = validateBashPath(cwd);
-      if (!cwdValidation.valid) {
-        return { content: [{ type: 'text', text: `bash: ${cwdValidation.reason}` }] };
-      }
-
-      const commandValidation = validateBashCommand(args.command, cwd);
-      if (!commandValidation.valid) {
-        return { content: [{ type: 'text', text: `bash: ${commandValidation.reason}` }] };
-      }
-
       try {
         const encodedCommand = Buffer.from(args.command).toString('base64');
 
@@ -79,9 +68,8 @@ IMPORTANT: ~ is automatically expanded to home directory. All paths are validate
         };
 
         const safeDirs = getSafeDirs();
-        const volumeMounts = safeDirs.map((d, i) =>
-          `-v "${d}:/workspace${i > 0 ? '/' + path.basename(d) : ''}:rw"`
-        ).join(' ');
+        const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:rw"`).join(' ');
+        const firstDir = safeDirs[0] || '/';
 
         const dockerCmd = `docker run --rm ` +
           `--user $(id -u):$(id -g) ` +
@@ -93,7 +81,7 @@ IMPORTANT: ~ is automatically expanded to home directory. All paths are validate
           `--memory=512m --memory-swap=512m ` +
           `--pids-limit=64 ` +
           `--ulimit nofile=1024:1024 ` +
-          `--env HOME=/workspace ` +
+          `--env HOME=${firstDir} ` +
           `--env TERM=xterm-256color ` +
           `--tmpfs /tmp:rw,noexec,nosuid,size=64m ` +
           `--tmpfs /var/run:rw,noexec,nosuid,size=8m ` +
