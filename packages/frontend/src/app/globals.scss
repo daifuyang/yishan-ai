@@ -116,55 +116,68 @@
 
 .prose {
   code {
-    @apply bg-muted px-1.5 py-0.5 rounded text-[13px] font-mono;
+    @apply bg-muted/80 px-1.5 py-0.5 rounded text-[13px] font-mono border border-border/50;
   }
 
   pre {
-    @apply bg-muted/80 rounded-lg p-4 my-3 overflow-x-auto;
+    @apply bg-muted/50 rounded-lg p-5 my-4 overflow-auto max-w-full border border-border/50 shadow-sm;
 
     code {
-      @apply bg-transparent p-0 text-[13px];
+      @apply bg-transparent p-0 text-[13px] border-none shadow-none;
     }
   }
 
   p {
-    @apply my-2;
+    @apply my-3 leading-relaxed;
   }
 
   ul, ol {
-    @apply my-2 pl-6;
+    @apply my-3 pl-6;
   }
 
   li {
-    @apply my-1;
+    @apply my-1.5 leading-relaxed;
   }
 
   blockquote {
-    @apply border-l-4 border-muted-foreground/30 pl-4 italic my-3 text-muted-foreground;
+    @apply border-l-4 border-primary/30 pl-4 italic my-4 text-muted-foreground bg-muted/30 py-1 rounded-r-md;
   }
 
   h1, h2, h3, h4 {
-    @apply font-semibold mt-4 mb-2;
+    @apply font-bold mt-6 mb-3 tracking-tight;
   }
 
-  h1 { @apply text-xl; }
-  h2 { @apply text-lg; }
-  h3 { @apply text-base; }
+  h1 { @apply text-2xl; }
+  h2 { @apply text-xl; }
+  h3 { @apply text-lg; }
+  h4 { @apply text-base; }
+
+  a {
+    @apply text-primary no-underline hover:underline transition-colors;
+  }
+
+  hr {
+    @apply my-6 border-border/60;
+  }
 
   table {
-    @apply w-full border-collapse text-sm;
+    @apply w-full border-collapse text-sm my-4 rounded-lg overflow-hidden border border-border;
   }
 
   th, td {
-    @apply border border-border px-3 py-2 text-left;
+    @apply border border-border/60 px-4 py-2.5 text-left;
   }
 
   th {
-    @apply bg-muted font-semibold;
+    @apply bg-muted/50 font-semibold text-foreground;
   }
 
   tr:nth-child(even) td {
-    @apply bg-muted/30;
+    @apply bg-muted/20;
+  }
+
+  img {
+    @apply rounded-lg shadow-md my-4;
   }
 }
 
@@ -201,5 +214,65 @@
 
 .animate-fade-in-up {
   animation: fadeInUp 0.3s ease-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.2s ease-out forwards;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slideInFromLeft 0.3s ease-out forwards;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.scrollbar-thin::-webkit-scrollbar-corner {
+  background: transparent;
 }
 

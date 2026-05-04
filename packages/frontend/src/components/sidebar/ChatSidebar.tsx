@@ -24,7 +24,6 @@ import { SidebarFooter as AppSidebarFooter } from "./SidebarFooter";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { EmptyState } from "@/components/chat/empty-state";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -72,15 +71,13 @@ function ChatContent({ sessionId }: ChatContentProps) {
   return (
     <div className="flex flex-col h-screen">
       {hasMessages ? (
-        <div className="flex flex-col h-full border rounded-xl m-4 overflow-hidden">
-          <ScrollArea className="flex-1">
-            <MessageList
-              messages={messages}
-              isStreaming={isStreaming}
-              streamingContent={streamingContent}
-            />
-          </ScrollArea>
-          <div className="shrink-0">
+        <div className="flex flex-col flex-1 border rounded-xl m-4 overflow-hidden">
+          <MessageList
+            messages={messages}
+            isStreaming={isStreaming}
+            streamingContent={streamingContent}
+          />
+          <div className="shrink-0 px-4 pb-4">
             <ChatInput
               onSend={handleSend}
               onStop={handleStop}

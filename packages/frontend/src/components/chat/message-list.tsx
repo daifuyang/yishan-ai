@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import React, { useState, useCallback } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Bot, RotateCcw, ChevronDown, ChevronUp, Wrench } from 'lucide-react';
+import { Copy, Check, Bot, RotateCcw, ChevronDown, ChevronUp, Wrench, ArrowDown, ArrowUp } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -15,6 +14,8 @@ import { ToolCallBlock, type ToolCall } from '@/components/mcp/tool-call-block';
 const markdownComponents: Components = {
   table: ({ children }) => <table>{children}</table>,
 };
+
+
 
 interface ContentBlock {
   type: 'text' | 'tool_use';
@@ -40,6 +41,7 @@ interface MessageListProps {
   isStreaming: boolean;
   streamingContent: string;
   onRollback?: (messageId: string, content: string) => void;
+  className?: string;
 }
 
 function useCopyToClipboard() {
@@ -54,30 +56,7 @@ function useCopyToClipboard() {
   return { copiedId, handleCopy };
 }
 
-function useAutoScroll(isStreaming: boolean) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isNearBottom, setIsNearBottom] = useState(true);
 
-  const handleScroll = useCallback(() => {
-    const container = containerRef.current?.querySelector('[data-scroll="true"]');
-    if (!container) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    setIsNearBottom(distanceFromBottom < 100);
-  }, []);
-
-  useEffect(() => {
-    if (isStreaming && isNearBottom) {
-      const container = containerRef.current?.querySelector('[data-scroll="true"]');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }
-  }, [isStreaming, isNearBottom]);
-
-  return { containerRef, handleScroll, isNearBottom };
-}
 
 function CopyButton({ content, id, copiedId, onCopy }: {
   content: string;
@@ -185,7 +164,7 @@ function AssistantBubble({
 
       {textContent && (
         <div className="msg-actions-wrapper">
-          <div className="bg-card text-foreground rounded">
+<div className="bg-card text-foreground rounded max-w-full">
             <div className="prose dark:prose-invert max-w-none text-[15px]">
               <ReactMarkdown
                 components={markdownComponents}
@@ -269,7 +248,7 @@ function StreamingIndicator() {
 
 function StreamingBubble({ content }: { content: string }) {
   return (
-    <div className="bg-card text-foreground rounded">
+    <div className="bg-card text-foreground rounded max-w-full">
       <div className="prose dark:prose-invert max-w-none text-[15px]">
         <ReactMarkdown
           components={markdownComponents}
@@ -284,8 +263,7 @@ function StreamingBubble({ content }: { content: string }) {
   );
 }
 
-export function MessageList({ messages, isStreaming, streamingContent, onRollback }: MessageListProps) {
-  const { containerRef, handleScroll, isNearBottom } = useAutoScroll(isStreaming);
+export function MessageList({ messages, isStreaming, streamingContent, onRollback, className }: MessageListProps) {
   const { copiedId, handleCopy } = useCopyToClipboard();
 
   const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
@@ -294,8 +272,8 @@ export function MessageList({ messages, isStreaming, streamingContent, onRollbac
     lastAssistantMsg.content.some(c => c.type === 'tool_use');
 
   return (
-    <ScrollArea className="flex-1 px-4 py-6" ref={containerRef} onScroll={handleScroll}>
-      <div className="max-w-3xl mx-auto space-y-5">
+    <div className={cn("relative flex flex-col", className)}>
+      <div className="mx-auto w-full space-y-5 py-[60px]">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -326,6 +304,6 @@ export function MessageList({ messages, isStreaming, streamingContent, onRollbac
           </div>
         )}
       </div>
-    </ScrollArea>
+    </div>
   );
 }
