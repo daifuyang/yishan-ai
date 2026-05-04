@@ -26,7 +26,7 @@ export function EmptyState({ onSend, onStop, isStreaming, disabled, defaultModel
         <p className="text-xl font-semibold tracking-tight">{getGreeting()}</p>
         <p className="text-sm text-muted-foreground tracking-wide">Yishan AI 助手</p>
       </div>
-      <div className="w-full max-w-xl px-4 mt-2">
+      <div className="w-full max-w-3xl px-4 mt-2">
         <ChatInput
           onSend={onSend}
           onStop={onStop}

@@ -30,7 +30,7 @@ app.prepare().then(() => {
     const accept = req.headers.accept || '';
     const isSSE = accept.includes('text/event-stream');
 
-    if (pathname.startsWith('/api/') || isSSE) {
+    if ((pathname.startsWith('/api/') && !pathname.startsWith('/api/fs/')) || isSSE) {
       proxy.web(req, res);
     } else {
       handle(req, res);

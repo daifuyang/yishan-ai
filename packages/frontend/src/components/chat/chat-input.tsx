@@ -92,7 +92,7 @@ export function ChatInput({
         onKeyDown={handleKeyDown}
         placeholder={isStreaming ? 'AI 正在回复...' : '输入消息...'}
         disabled={isDisabled}
-        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none mb-3 text-[15px] bg-transparent"
+        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none mb-3 text-[15px] bg-transparent chat-input-textarea"
       />
       <div className="flex items-center gap-2">
         <Select value={mode} onValueChange={(v) => setMode(v as ChatMode)} disabled={isDisabled}>
