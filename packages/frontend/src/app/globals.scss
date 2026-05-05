@@ -423,7 +423,7 @@
   align-self: stretch;
   gap: 0;
   justify-content: flex-start;
-  padding: 8px 12px;
+  padding: 8px 0;
   cursor: pointer;
   user-select: none;
   overflow: hidden;
@@ -957,6 +957,7 @@
 .tool-shell-submessage-value {
   min-width: 0;
   flex: 1;
+  color: #6F6F6F;
   transition: opacity 320ms ease-out, filter 320ms ease-out;
   overflow: hidden;
   text-overflow: ellipsis;
