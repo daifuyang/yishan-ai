@@ -5,11 +5,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Bot, RotateCcw, ChevronDown, ChevronUp, Wrench, ArrowDown, ArrowUp } from 'lucide-react';
+import { Copy, Check, Bot, RotateCcw } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { ToolCallBlock, type ToolCall } from '@/components/mcp/tool-call-block';
+import { ToolItem, groupToolCalls, type ToolCall } from '@/components/mcp/tool-call-block';
 
 const markdownComponents: Components = {
   table: ({ children }) => <table>{children}</table>,
@@ -42,6 +42,19 @@ interface MessageListProps {
   streamingContent: string;
   onRollback?: (messageId: string, content: string) => void;
   className?: string;
+}
+
+function contentBlocksToToolCalls(blocks: ContentBlock[]): ToolCall[] {
+  return blocks
+    .filter((b): b is ContentBlock & { name: string } => b.type === 'tool_use' && !!b.name)
+    .map((block) => ({
+      id: block.id || crypto.randomUUID(),
+      name: block.name,
+      input: block.input || {},
+      output: block.result,
+      error: block.error,
+      status: block.error ? 'error' as const : block.result ? 'completed' as const : 'running' as const,
+    }));
 }
 
 function useCopyToClipboard() {
@@ -86,53 +99,6 @@ function CopyButton({ content, id, copiedId, onCopy }: {
   );
 }
 
-function ToolUseCard({ block }: { block: ContentBlock }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (block.type !== 'tool_use') return null;
-
-  return (
-    <div className="border rounded-lg p-3 my-2 bg-muted/50">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-sm font-medium"><Wrench className="h-3 w-3" /> {block.name}</span>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          {expanded ? '收起' : '展开'}
-        </Button>
-      </div>
-
-      {expanded && (
-        <div className="mt-3 space-y-2 text-sm">
-          <div>
-            <span className="text-muted-foreground">输入：</span>
-            <pre className="mt-1 p-2 bg-background rounded overflow-auto max-h-32">
-              {JSON.stringify(block.input || {}, null, 2)}
-            </pre>
-          </div>
-          {block.result !== undefined && (
-            <div>
-              <span className="text-muted-foreground">输出：</span>
-              <pre className={cn(
-                "mt-1 p-2 bg-background rounded overflow-auto max-h-48",
-                block.error && "text-destructive"
-              )}>
-                {block.error || block.result}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function AssistantBubble({
   message,
   copiedId,
@@ -150,16 +116,12 @@ function AssistantBubble({
     ? []
     : message.content.filter(c => c.type === 'tool_use');
 
+  const toolCalls = contentBlocksToToolCalls(toolUseBlocks);
+
   return (
     <div className="flex flex-col gap-2 flex-1 min-w-0">
-      {toolUseBlocks.length > 0 && (
-        <div className="text-sm text-muted-foreground">
-          使用了 {toolUseBlocks.length} 个工具
-        </div>
-      )}
-
-      {toolUseBlocks.map((block, idx) => (
-        <ToolUseCard key={block.id || idx} block={block} />
+      {toolCalls.map((toolCall) => (
+        <ToolItem key={toolCall.id} toolCall={toolCall} />
       ))}
 
       {textContent && (

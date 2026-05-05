@@ -41,6 +41,7 @@ IMPORTANT: ~ is automatically expanded to home directory. All paths are validate
       properties: {
         command: { type: 'string', description: 'The bash command to execute' },
         cwd: { type: 'string', description: 'Working directory for the command' },
+        description: { type: 'string', description: 'Clear, concise description in 5-10 Chinese words. Example: ls -> "列出当前目录文件"' },
       },
       required: ['command'],
     },

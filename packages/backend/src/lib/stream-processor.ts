@@ -25,6 +25,7 @@ interface ToolCallResult {
 class StreamProcessor extends EventEmitter {
   private sseClients = new Map<string, Set<SSEClient>>();
   private runningTasks = new Map<string, AbortController>();
+  private currentTools: any[] = [];
 
   constructor() {
     super();
@@ -160,6 +161,7 @@ class StreamProcessor extends EventEmitter {
   }
 
   private async processTask(sessionId: string, systemPrompt: string, tools: any[], signal: AbortSignal) {
+    this.currentTools = tools;
     signal.addEventListener('abort', () => {
       console.log(`[STREAM_PROC] Task ${sessionId} cancelled`);
     });
@@ -359,9 +361,11 @@ class StreamProcessor extends EventEmitter {
                     const args = JSON.parse(inputStr);
                     log?.info('CBS_CALL', `Round ${round} calling ${pendingToolCall.name}`, { round, toolName: pendingToolCall.name, args });
 
-                    this.broadcast(sessionId, 'tool_call', { tool: pendingToolCall.name, args });
-
                     const toolName = pendingToolCall.name;
+                    const toolDescription = this.currentTools.find(t => t.name === toolName)?.description;
+                    const description = args.description || toolDescription;
+                    this.broadcast(sessionId, 'tool_call', { tool: toolName, args, description });
+
                     const toolId = pendingToolCall.id;
                     log?.info('CBS_AWAIT', `Round ${round} before await`, { round, toolName });
 

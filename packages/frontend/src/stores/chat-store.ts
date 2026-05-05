@@ -58,6 +58,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const data = await res.json();
 
     if (data.messages) {
+      const toolResultsMap = new Map<string, { result?: string; error?: string }>();
+
+      for (const m of data.messages) {
+        if (m.role === 'tool' && Array.isArray(m.content)) {
+          for (const c of m.content) {
+            if (c.type === 'tool_result' && c.tool_use_id) {
+              toolResultsMap.set(c.tool_use_id, {
+                result: c.content,
+                error: c.error,
+              });
+            }
+          }
+        }
+      }
+
       const messages: Message[] = data.messages.map((m: any) => {
         let content: string | ContentBlock[];
         let toolCalls: ToolCall[] | undefined;
@@ -65,15 +80,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         if (Array.isArray(m.content)) {
           content = m.content.map((c: any) => {
             if (c.type === 'tool_use') {
+              const toolResult = toolResultsMap.get(c.id);
               toolCalls = toolCalls || [];
               toolCalls.push({
                 id: c.id,
                 name: c.name,
                 input: c.input || {},
-                output: c.result,
-                error: c.error,
-                status: c.error ? 'error' : 'completed',
+                output: toolResult?.result,
+                error: toolResult?.error,
+                status: toolResult?.error ? 'error' : toolResult?.result ? 'completed' : 'running',
               });
+              return {
+                ...c,
+                result: toolResult?.result,
+                error: toolResult?.error,
+              };
             }
             return c;
           });
@@ -150,7 +171,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           type: 'tool_use',
           id: crypto.randomUUID(),
           name: data.data.tool,
-          input: data.data.args || {},
+          input: { ...(data.data.args || {}), description: data.data.description },
         };
         set((state) => {
           const lastMsg = state.messages[state.messages.length - 1];
@@ -272,7 +293,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           type: 'tool_use',
           id: crypto.randomUUID(),
           name: data.data.tool,
-          input: data.data.args || {},
+          input: { ...(data.data.args || {}), description: data.data.description },
         };
         set((state) => {
           const lastMsg = state.messages[state.messages.length - 1];
