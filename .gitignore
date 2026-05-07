@@ -13,3 +13,12 @@ packages/backend/logs
 .pnpm-debug.log
 .pnpm-store
 .playwright-cli
+
+# Temporary / test files
+*.wav
+*.ssml
+key
+region
+rich-dad-text.txt
+dotnet-install.sh
+ecosystem.config.js
