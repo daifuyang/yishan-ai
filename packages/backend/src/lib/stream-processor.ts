@@ -275,13 +275,18 @@ class StreamProcessor extends EventEmitter {
           firstMessage: formattedMessages[0] ? (typeof formattedMessages[0].content === 'string' ? formattedMessages[0].content.slice(0, 100) : JSON.stringify(formattedMessages[0].content).slice(0, 100)) : null,
         });
 
+        const apiTools = tools?.map((t: any) => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.inputSchema || t.input_schema || { type: 'object', properties: {} },
+        }));
         const stream = client.messages.stream({
           model,
           max_tokens: 4096,
           temperature: 1,
           system: systemPrompt,
           messages: formattedMessages,
-          tools,
+          tools: apiTools,
         });
 
         let pendingToolCall: { name: string; input: string; id: string } | null = null;
@@ -297,6 +302,13 @@ class StreamProcessor extends EventEmitter {
           round,
           messagesCount: formattedMessages.length,
           toolsCount: tools?.length || 0,
+          toolsDetails: tools?.map((t: any) => ({
+            name: t.name,
+            hasDescription: !!t.description,
+            hasInputSchema: !!(t.inputSchema || t.input_schema),
+            inputSchemaType: (t.inputSchema || t.input_schema)?.type,
+            inputSchemaProperties: (t.inputSchema || t.input_schema) ? Object.keys(t.inputSchema || t.input_schema) : [],
+          })),
           systemPromptLength: systemPrompt.length,
           systemPromptPreview: systemPrompt.slice(0, 100) + (systemPrompt.length > 100 ? '...' : ''),
           firstMessageRole: formattedMessages[0]?.role,
@@ -587,6 +599,30 @@ class StreamProcessor extends EventEmitter {
   }
 
   private async callTool(name: string, args: Record<string, unknown>): Promise<any> {
+    const directory = configManager.get('workspace.directories')?.[0] || process.cwd();
+
+    try {
+      const { toolRegistry } = await import('../tools/index.js');
+
+      if (toolRegistry.has(name)) {
+        const result = await toolRegistry.call(name, args, {
+          sessionId: '',
+          messageId: '',
+          agent: '',
+          abort: new AbortController().signal,
+          directory,
+          worktree: directory,
+        });
+
+        return {
+          content: [{ type: 'text', text: result.output }],
+          isError: false,
+        };
+      }
+    } catch (err) {
+      console.log(`[STREAM_PROC] Built-in tool ${name} not found or failed, falling back to MCP:`, err);
+    }
+
     const { getMcpManager } = await import('./mcp-manager.js');
     const mcpManager = getMcpManager();
     return mcpManager.callTool(name, args);

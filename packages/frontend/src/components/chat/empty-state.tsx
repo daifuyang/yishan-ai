@@ -1,6 +1,6 @@
 'use client';
 
-import { ChatInput } from './chat-input';
+import { ChatInputWrapper } from './chat-input-wrapper';
 import { type ChatMode } from '@/lib/constants';
 
 function getGreeting() {
@@ -21,13 +21,13 @@ interface EmptyStateProps {
 
 export function EmptyState({ onSend, onStop, isStreaming, disabled, defaultModel, initialContent }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 animate-fade-in-up">
-      <div className="text-center space-y-1">
-        <p className="text-xl font-semibold tracking-tight">{getGreeting()}</p>
-        <p className="text-sm text-muted-foreground tracking-wide">Yishan AI 助手</p>
-      </div>
-      <div className="w-full max-w-3xl px-4 mt-2">
-        <ChatInput
+    <div className="flex flex-col h-full w-full animate-fade-in-up">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        <div className="flex flex-col items-center text-center space-y-1">
+          <p className="text-xl font-semibold tracking-tight">{getGreeting()}</p>
+          <p className="text-sm text-muted-foreground tracking-wide">Yishan AI 助手</p>
+        </div>
+        <ChatInputWrapper
           onSend={onSend}
           onStop={onStop}
           isStreaming={isStreaming}

@@ -3,8 +3,10 @@ import fastifyCors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as fs from 'node:fs';
 
-const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../frontend/out');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const FRONTEND_DIR = resolve(__dirname, '..', '..', 'public');
 
 export default fp(async (fastify: any) => {
   if (process.env.NODE_ENV !== 'production') {
@@ -25,6 +27,19 @@ export default fp(async (fastify: any) => {
     if (request.url.startsWith('/api/')) {
       return reply.code(404).send({ error: 'Not Found' });
     }
-    return reply.sendFile('index.html');
+
+    let url = request.url.split('?')[0];
+    if (url.endsWith('/')) {
+      url = url.slice(0, -1);
+    }
+
+    const htmlFile = url.slice(1) + '.html';
+    const fullPath = resolve(FRONTEND_DIR, htmlFile);
+
+    if (htmlFile === '.html' || !fs.existsSync(fullPath)) {
+      return reply.sendFile('index.html');
+    }
+
+    return reply.sendFile(htmlFile);
   });
 }, { name: 'support' });

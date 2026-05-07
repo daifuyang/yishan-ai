@@ -4,7 +4,8 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMigrations } from './migrations.js';
 
-const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../data');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = resolve(__dirname, '../../data');
 const DB_PATH = resolve(DATA_DIR, 'yishan.db');
 
 let db: Database.Database;

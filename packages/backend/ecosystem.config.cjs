@@ -1,7 +1,8 @@
 module.exports = {
   apps: [{
     name: 'yishan-ai',
-    script: './dist/app.js',
+    script: './dist/server.js',
+    exec_mode: 'fork',
     instances: 1,
     autorestart: true,
     watch: false,

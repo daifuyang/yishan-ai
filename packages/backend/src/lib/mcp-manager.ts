@@ -2,14 +2,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { EventEmitter } from 'events';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { configManager } from './config-manager.js';
-
-const execAsync = promisify(exec);
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -19,158 +14,6 @@ function mcpLog(level: 'INFO' | 'WARN' | 'ERROR', message: string, meta?: Record
   const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
   console.log(`[${timestamp}] [MCP] [${level}] ${message}${metaStr}`);
 }
-
-interface BuiltInTool {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: 'object';
-    properties: Record<string, any>;
-    required?: string[];
-  };
-  handler: (args: Record<string, any>) => Promise<any>;
-}
-
-const builtInTools: Map<string, BuiltInTool> = new Map([
-  ['bash', {
-    name: 'bash',
-    description: `Execute a bash command and return the output.
-IMPORTANT: ~ is automatically expanded to home directory. All paths are validated against workspace directories. Paths outside workspace will fail with "Directory does not exist".`,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        command: { type: 'string', description: 'The bash command to execute' },
-        cwd: { type: 'string', description: 'Working directory for the command' },
-        description: { type: 'string', description: 'Clear, concise description in 5-10 Chinese words. Example: ls -> "列出当前目录文件"' },
-      },
-      required: ['command'],
-    },
-    handler: async (args) => {
-      const cwd = args.cwd || configManager.get('workspace.directories')?.[0] || process.cwd();
-
-      try {
-        const encodedCommand = Buffer.from(args.command).toString('base64');
-
-        const getSafeDirs = (): string[] => {
-          const configPath = os.homedir() + '/.yishan-ai/config.json';
-          try {
-            if (fs.existsSync(configPath)) {
-              const content = fs.readFileSync(configPath, 'utf-8');
-              const config = JSON.parse(content);
-              if (config.workspace?.directories) {
-                return config.workspace.directories.map((d: string) => {
-                  if (d.startsWith('~')) return d.replace('~', os.homedir());
-                  return d;
-                }).filter((d: string) => fs.existsSync(d));
-              }
-            }
-          } catch (e) {}
-          return [os.homedir() + '/yishan-workspace'];
-        };
-
-        const safeDirs = getSafeDirs();
-        const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:rw"`).join(' ');
-        const firstDir = safeDirs[0] || '/';
-
-        const dockerCmd = `docker run --rm ` +
-          `--user $(id -u):$(id -g) ` +
-          `--group-add $(id -g) ` +
-          `--cap-drop ALL ` +
-          `--security-opt=no-new-privileges ` +
-          `--security-opt seccomp=${os.homedir()}/.yishan-ai/isolated/seccomp.json ` +
-          `--read-only ` +
-          `--memory=512m --memory-swap=512m ` +
-          `--pids-limit=64 ` +
-          `--ulimit nofile=1024:1024 ` +
-          `--env HOME=${firstDir} ` +
-          `--env TERM=xterm-256color ` +
-          `--tmpfs /tmp:rw,noexec,nosuid,size=64m ` +
-          `--tmpfs /var/run:rw,noexec,nosuid,size=8m ` +
-          `--entrypoint /bin/bash ` +
-          `${volumeMounts} ` +
-          `isolated -c 'echo ${encodedCommand} | base64 -d | /bin/bash'`;
-
-        const { stdout, stderr } = await execAsync(dockerCmd, {
-          cwd: cwd,
-          timeout: 60000,
-        });
-
-        let output = stdout.replace(/[\x1b\x9b][\(]?[0-?]*[ -/]*[@-~]/g, '');
-        output = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
-        if (stderr) {
-          output += '\nSTDERR: ' + stderr;
-        }
-        return { content: [{ type: 'text', text: output || '(no output)' }] };
-      } catch (error: any) {
-        return { content: [{ type: 'text', text: 'Error: ' + error.message }] };
-      }
-    },
-  }],
-  ['get_current_time', {
-    name: 'get_current_time',
-    description: 'Get the current system time in multiple formats',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        timezone: {
-          type: 'string',
-          description: 'Timezone name (e.g., "Asia/Shanghai", "America/New_York"). Defaults to local timezone.',
-        },
-        format: {
-          type: 'string',
-          enum: ['full', 'date', 'time', 'iso'],
-          description: 'Output format: "full" (complete datetime), "date" (YYYY-MM-DD), "time" (HH:mm:ss), "iso" (ISO 8601)',
-          default: 'full',
-        },
-      },
-    },
-    handler: async (args) => {
-      const now = new Date();
-      let output = '';
-
-      if (args.timezone) {
-        try {
-          const formatter = new Intl.DateTimeFormat('zh-CN', {
-            timeZone: args.timezone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false,
-          });
-          output = formatter.format(now);
-          if (args.format === 'iso') {
-            output = now.toISOString();
-          }
-        } catch {
-          return { content: [{ type: 'text', text: `Invalid timezone: ${args.timezone}` }] };
-        }
-      } else {
-        const localeStr = now.toLocaleString('zh-CN');
-        const isoStr = now.toISOString();
-        const utcStr = now.toUTCString();
-
-        switch (args.format) {
-          case 'date':
-            output = now.toLocaleDateString('zh-CN');
-            break;
-          case 'time':
-            output = now.toLocaleTimeString('zh-CN');
-            break;
-          case 'iso':
-            output = isoStr;
-            break;
-          default:
-            output = `本地时间: ${localeStr}\nUTC 时间: ${utcStr}\nISO 时间: ${isoStr}`;
-        }
-      }
-
-      return { content: [{ type: 'text', text: output }] };
-    },
-  }],
-]);
 
 export interface MCPConfig {
   command?: string;
@@ -256,89 +99,84 @@ export class McpManager extends EventEmitter {
       throw new Error(`Server "${name}" not found`);
     }
 
-    if (!server.enabled) {
-      throw new Error(`Server "${name}" is disabled`);
-    }
-
     if (this.connections.has(name)) {
       mcpLog('INFO', `Using existing connection for ${name}`);
-      return this.connections.get(name)!.tools;
+      const conn = this.connections.get(name)!;
+      server.tools = conn.tools;
+      return conn.tools;
     }
 
     mcpLog('INFO', `Connecting to MCP server: ${name}`);
-    server.status = 'connecting';
-    this.emit('serverChanged', this.getServers());
-    this.emit('serverStatusChanged', { name, status: 'connecting' });
 
     try {
-      let transport;
-      const config = server.config;
+      let transport: any;
 
-      if (config.url) {
-        mcpLog('INFO', `Using SSE transport for ${name}`, { url: config.url });
-        transport = new SSEClientTransport(new URL(config.url));
-      } else if (config.command) {
-        mcpLog('INFO', `Using stdio transport for ${name}`, { command: config.command, args: config.args });
-        const env: Record<string, string> = {};
-        for (const [k, v] of Object.entries(process.env)) {
-          if (v !== undefined) env[k] = v;
-        }
-        if (config.env) {
-          for (const [k, v] of Object.entries(config.env)) {
-            if (v !== undefined) env[k] = v;
-          }
-        }
+      if (server.config.url) {
+        mcpLog('INFO', `Using SSE transport for ${name}`, { url: server.config.url });
+        transport = new SSEClientTransport(new URL(server.config.url));
+      } else if (server.config.command) {
+        mcpLog('INFO', `Using stdio transport for ${name}`, { command: server.config.command, args: server.config.args });
         transport = new StdioClientTransport({
-          command: config.command,
-          args: config.args || [],
-          env,
+          command: server.config.command,
+          args: server.config.args || [],
+          env: server.config.env,
         });
       } else {
         throw new Error('Invalid MCP server config: must have url or command');
       }
 
       const client = new Client(
-        { name: `yishan-ai-${name}`, version: '1.0.0' },
-        { capabilities: {} },
+        {
+          name: 'yishan-mcp-client',
+          version: '1.0.0',
+        }
       );
 
       await client.connect(transport);
-      const { tools } = await client.listTools();
 
-      const mcpTools: MCPTool[] = tools.map(t => ({
-        name: t.name,
-        description: t.description || '',
-        inputSchema: t.inputSchema,
-      }));
+      const toolsResult = await client.listTools();
+      const tools = (toolsResult as any).tools || [];
+
+      const mcpTools: MCPTool[] = tools.map((t: any) => {
+        const inputSchema = t.input_schema || t.inputSchema || { type: 'object', properties: {} };
+        mcpLog('INFO', `Mapping tool ${t.name}`, { hasInputSchema: !!(t.input_schema || t.inputSchema), inputSchemaType: inputSchema.type });
+        return {
+          name: t.name,
+          description: t.description || '',
+          inputSchema,
+        };
+      });
 
       this.connections.set(name, { client, transport, tools: mcpTools });
-      server.status = 'connected';
       server.tools = mcpTools;
-      server.error = undefined;
+      server.status = 'connected';
 
       mcpLog('INFO', `Successfully connected to ${name}`, { toolCount: mcpTools.length });
-
       this.emit('serverChanged', this.getServers());
-      this.emit('serverStatusChanged', { name, status: 'connected' });
 
       return mcpTools;
     } catch (err: any) {
-      mcpLog('ERROR', `Failed to connect to ${name}`, { error: err.message });
       server.status = 'error';
       server.error = err.message;
+      mcpLog('ERROR', `Failed to connect to ${name}`, { error: err.message });
       this.emit('serverChanged', this.getServers());
-      this.emit('serverStatusChanged', { name, status: 'error', error: err.message });
       throw err;
     }
   }
 
   async disconnectServer(name: string): Promise<void> {
     const conn = this.connections.get(name);
-    if (!conn) return;
+    if (!conn) {
+      return;
+    }
+
+    mcpLog('INFO', `Disconnecting from ${name}`);
 
     try {
       await conn.client.close();
-    } catch {}
+    } catch (err) {
+      mcpLog('WARN', `Error closing connection to ${name}`, { error: String(err) });
+    }
 
     this.connections.delete(name);
 
@@ -349,7 +187,6 @@ export class McpManager extends EventEmitter {
     }
 
     this.emit('serverChanged', this.getServers());
-    this.emit('serverStatusChanged', { name, status: 'disconnected' });
   }
 
   getServers(): MCPServer[] {
@@ -359,43 +196,19 @@ export class McpManager extends EventEmitter {
   listTools(): MCPTool[] {
     const allTools: MCPTool[] = [];
     for (const conn of this.connections.values()) {
-      allTools.push(...conn.tools);
-    }
-    for (const tool of builtInTools.values()) {
-      allTools.push({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-      });
+      for (const t of conn.tools) {
+        if (t.name && t.inputSchema) {
+          allTools.push(t);
+        } else {
+          mcpLog('WARN', `Skipping invalid tool`, { name: t.name, hasInputSchema: !!t.inputSchema });
+        }
+      }
     }
     return allTools;
   }
 
-  getAnthropicTools(): any[] {
-    return this.listTools().map(t => ({
-      name: t.name,
-      description: t.description,
-      input_schema: t.inputSchema,
-    }));
-  }
-
   async callTool(toolName: string, args: Record<string, any>): Promise<any> {
     const startTime = Date.now();
-
-    if (builtInTools.has(toolName)) {
-      const tool = builtInTools.get(toolName)!;
-      mcpLog('INFO', `Calling built-in tool: ${toolName}`, { argsKeys: Object.keys(args) });
-      try {
-        const result = await tool.handler(args);
-        const duration = Date.now() - startTime;
-        mcpLog('INFO', `Built-in tool ${toolName} completed`, { duration });
-        return result;
-      } catch (err: any) {
-        const duration = Date.now() - startTime;
-        mcpLog('ERROR', `Built-in tool ${toolName} failed`, { duration, error: err.message });
-        throw err;
-      }
-    }
 
     for (const [serverName, conn] of this.connections) {
       const tool = conn.tools.find(t => t.name === toolName);
@@ -416,8 +229,9 @@ export class McpManager extends EventEmitter {
         }
       }
     }
-    mcpLog('WARN', `Tool "${toolName}" not found in any connected server`);
-    throw new Error(`Tool "${toolName}" not found`);
+
+    mcpLog('WARN', `Tool "${toolName}" not found in any connected MCP server`);
+    throw new Error(`Tool "${toolName}" not found in any connected MCP server`);
   }
 
   async addServer(name: string, config: MCPConfig): Promise<void> {
@@ -478,11 +292,15 @@ export class McpManager extends EventEmitter {
       ([_, s]) => s.status !== 'connected'
     );
 
-    for (const [name] of disconnected) {
-      try {
-        await this.connectServer(name);
-      } catch {}
-    }
+    await Promise.allSettled(
+      disconnected
+        .filter(([_, s]) => s.enabled)
+        .map(([name]) => this.connectServer(name).catch(() => {}))
+    );
+  }
+
+  getTools(): MCPTool[] {
+    return this.listTools();
   }
 }
 

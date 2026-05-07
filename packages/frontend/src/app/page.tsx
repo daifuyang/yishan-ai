@@ -4,21 +4,24 @@ import React, { Suspense, useCallback, useState, useTransition, useRef, useEffec
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { ChatLayout } from "@/components/layout/ChatLayout";
+import { useSidebar } from "@/components/ui/sidebar";
 import { useSessionStore } from "@/stores/session-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useConfigStore } from "@/stores/config-store";
 import { MessageList } from "@/components/chat/message-list";
-import { ChatInput } from "@/components/chat/chat-input";
+import { ChatInputWrapper } from "@/components/chat/chat-input-wrapper";
 import { EmptyState } from "@/components/chat/empty-state";
+import { ChatHeader } from "@/components/chat/chat-header";
 import { toast } from "sonner";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
-import { ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, Menu, Edit } from 'lucide-react';
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { sessions, createSession, fetchSessions } = useSessionStore();
+  const { isMobile, setOpenMobile, openMobile, toggleSidebar, state } = useSidebar();
   const { messages, isStreaming, streamingContent, errorMessage, fetchMessages, sendMessage, stopStream, clearMessages, rollbackMessage, clearError } = useChatStore();
   const { fetchConfig } = useConfigStore();
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -168,7 +171,8 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     <>
       {hasMessages ? (
         <div className="min-h-screen flex flex-col">
-          <div className="w-full flex-1 max-w-3xl mx-auto">
+          {session && <ChatHeader title={session.title} />}
+          <div className="w-full flex-1 max-w-3xl mx-auto px-4 sm:px-6">
             <MessageList
               messages={messages}
               isStreaming={isStreaming}
@@ -176,10 +180,10 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
               onRollback={handleRollback}
             />
           </div>
-          <div className="sticky bottom-0 shrink-0 px-6 pb-6 pt-2 bg-background flex items-center justify-center">
+          <div className="sticky bottom-0 shrink-0 pb-4 pt-2 bg-background">
             {scrollState.canScroll && (
-              <div className="absolute w-full top-0 max-w-3xl">
-                <div className="absolute bottom-4 right-0 flex flex-col gap-2">
+              <div className="relative w-full max-w-3xl mx-auto">
+                <div className="absolute right-6 top-0 flex flex-col gap-2">
                   {showTopButton && (
                     <Button
                       variant="outline"
@@ -207,16 +211,14 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
                 </div>
               </div>
             )}
-            <div className="w-full max-w-3xl mx-auto">
-              <ChatInput
-                onSend={handleSend}
-                onStop={handleStop}
-                isStreaming={isStreaming}
-                disabled={isCreating}
-                defaultModel={session?.model}
-                initialContent={rollbackContent}
-              />
-            </div>
+            <ChatInputWrapper
+              onSend={handleSend}
+              onStop={handleStop}
+              isStreaming={isStreaming}
+              disabled={isCreating}
+              defaultModel={session?.model}
+              initialContent={rollbackContent}
+            />
           </div>
         </div>
       ) : shouldShowLoading ? (
@@ -224,15 +226,54 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
           <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
         </div>
       ) : (
-        <div className="h-full px-6 py-8">
-          <EmptyState
-            onSend={handleSend}
-            onStop={handleStop}
-            isStreaming={isStreaming}
-            disabled={isCreating}
-            defaultModel={session?.model}
-            initialContent={rollbackContent}
-          />
+        <div className="h-full flex flex-col">
+          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
+            <div className="flex items-center h-14 pl-4 pr-4 sm:pl-6 sm:pr-6 group">
+              <div className="shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => {
+                    if (isMobile) {
+                      setOpenMobile(!openMobile);
+                    } else {
+                      toggleSidebar();
+                    }
+                  }}
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <div className="flex-1 flex justify-start">
+                <div className="flex items-center gap-2 group">
+                  <h1 className="text-sm font-medium truncate">
+                    {session?.title || '新对话'}
+                  </h1>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="shrink-0 h-9 w-9" />
+            </div>
+          </div>
+          <div className="flex-1 py-8">
+            <EmptyState
+              onSend={handleSend}
+              onStop={handleStop}
+              isStreaming={isStreaming}
+              disabled={isCreating}
+              defaultModel={session?.model}
+              initialContent={rollbackContent}
+            />
+          </div>
         </div>
       )}
     </>

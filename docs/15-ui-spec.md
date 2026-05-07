@@ -187,19 +187,29 @@ function FloatingExpandIcon() {
 │  Textarea (自适应高度，1~6 行)                                    │
 │  输入消息... Shift+Enter 换行                                     │
 └─────────────────────────────────────────────────────────────────┘
-┌──────────────┐ ┌──────────────┐                        ┌────────┐
-│    Select    │ │    Select    │                        │ Button  │
-│  Build ▼     │ │MiniMax-M2.7▼ │                        │  发送   │
-└──────────────┘ └──────────────┘                        └────────┘
-  左侧：模式切换     中间：模型选择                        右侧：发送
+┌────────────────┐ ┌──────────────────────┐              ┌────────┐
+│  ModeSelector  │ │    ModelSelector     │              │SendBtn │
+│    Build ▼     │ │ MiniMax-M2.7-highspeed▼│              │  发送  │
+└────────────────┘ └──────────────────────┘              └────────┘
+   左侧：模式切换           中间：模型选择                    右侧：发送
 ```
 
-| 控件 | shadcn 组件 | 行为 |
-|------|------------|------|
-| 模式切换 | `Select` | Plan / Build 二选一，默认 Build |
-| 模型选择 | `Select` + `SelectGroup` + `SelectItem` | 默认 MiniMax-M2.7-highspeed |
-| 发送按钮 | `Button` | 流式中变为"停止"按钮（`Square` icon） |
-| 输入框 | `Textarea` | 自适应高度，Enter 发送，Shift+Enter 换行 |
+### 组件命名
+
+| 控件 | 组件名 | 宽度 (移动端) | 宽度 (PC) | shadcn 组件 |
+|------|--------|--------------|-----------|-------------|
+| 模式切换 | `ModeSelector` | 60px | 80px | `Select` |
+| 模型选择 | `ModelSelector` | 100px | flex-1 | `Select` + `SelectGroup` + `SelectItem` |
+| 发送按钮 | `SendButton` | 图标 | 图标+文字 | `Button` |
+| 输入框 | `ChatInput` | w-full | w-full | `Textarea` |
+| 输入区容器 | `ChatInputWrapper` | max-w-3xl | max-w-3xl | - |
+
+| 控件 | 行为 |
+|------|------|
+| 模式切换 | Plan / Build 二选一，默认 Build |
+| 模型选择 | 默认 MiniMax-M2.7-highspeed |
+| 发送按钮 | 流式中变为"停止"按钮（`Square` icon） |
+| 输入框 | 自适应高度，Enter 发送，Shift+Enter 换行 |
 
 **流式输出时输入区状态：**
 
@@ -378,9 +388,9 @@ useEffect(() => {
 | UI 区域 | shadcn 组件 | 用途 |
 |---------|------------|------|
 | 消息输入 | `Textarea` | 自适应高度 1~6 行，Shift+Enter 换行 |
-| 模式切换 | `ToggleGroup` + `ToggleGroupItem` | Plan / Build 切换 |
-| 模型选择 | `Select` + `SelectGroup` + `SelectItem` | 模型下拉 |
-| 发送按钮 | `Button` + lucide `SendHorizonal` / `Square` | 发送/停止 |
+| 模式切换 | `ModeSelector` (`Select`) | Plan / Build 切换，默认 Build |
+| 模型选择 | `ModelSelector` (`Select`) | 模型下拉 |
+| 发送按钮 | `SendButton` (`Button`) | 发送/停止，lucide `SendHorizonal` / `Square` |
 | 通知提示 | `sonner` toast | 操作成功/失败提示 |
 
 ### 会话管理
@@ -486,7 +496,8 @@ components/chat/
 ├── plan-card.tsx           → Card 步骤列表，编辑/删除/执行
 ├── plan-step-item.tsx      → 单步骤条目（Badge 状态 + 详情展开）
 ├── build-progress.tsx      → build 逐步执行进度
-├── chat-input.tsx          → 卡片式输入框（Textarea + Select + Button）
+├── chat-input.tsx          → 卡片式输入框（Textarea + ModeSelector + ModelSelector + SendButton）
+├── chat-input-wrapper.tsx  → 输入区容器（max-w-3xl 居中，px-4 移动端边距）
 └── empty-state.tsx         → 空态引导（居中问候语 + 输入框）
 
 components/sidebar/

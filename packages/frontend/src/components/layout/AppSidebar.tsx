@@ -51,7 +51,7 @@ function LogoIcon() {
 
 export function AppSidebar() {
   const router = useRouter();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
 
   const handleNewChat = useCallback(() => {
@@ -61,15 +61,17 @@ export function AppSidebar() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex flex-col gap-3 px-3 py-3">
-        <div className="flex items-center gap-2 px-2 py-1.5">
+        <div className="flex items-center gap-2 py-1.5 px-2">
           <LogoIcon />
           <span className={isCollapsed ? "" : "text-sm font-semibold"}>Yishan AI</span>
-          <div
-            onClick={toggleSidebar}
-            className="ml-auto p-2 hover:bg-black/10 rounded-md cursor-pointer transition-colors"
-          >
-            <PanelLeft className="h-4 w-4 text-foreground" />
-          </div>
+          {isMobile && (
+            <div
+              onClick={toggleSidebar}
+              className="ml-auto p-2 hover:bg-black/10 rounded-md cursor-pointer transition-colors"
+            >
+              <PanelLeft className="h-4 w-4 text-foreground" />
+            </div>
+          )}
         </div>
 
         <Button

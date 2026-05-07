@@ -163,7 +163,7 @@ function UserBubble({
 
   return (
     <div className="msg-actions-wrapper align-end">
-      <div className="px-3 py-1.5 rounded bg-primary text-primary-foreground shadow-sm w-fit">
+      <div className="px-3 py-0.5 sm:py-1 rounded bg-primary text-primary-foreground shadow-sm w-fit">
         <div className="prose prose-invert max-w-none text-[15px] prose-p:my-0 prose-li:my-0">
           <ReactMarkdown>{textContent}</ReactMarkdown>
         </div>
@@ -234,8 +234,8 @@ export function MessageList({ messages, isStreaming, streamingContent, onRollbac
     lastAssistantMsg.content.some(c => c.type === 'tool_use');
 
   return (
-    <div className={cn("relative flex flex-col", className)}>
-      <div className="mx-auto w-full space-y-5 py-[60px]">
+    <div className={cn("relative flex flex-col px-4 sm:px-6", className)}>
+      <div className="mx-auto w-full space-y-5 py-4">
         {messages.map((msg) => (
           <div
             key={msg.id}

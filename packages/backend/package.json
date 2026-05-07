@@ -6,7 +6,8 @@
   "main": "dist/app.js",
   "scripts": {
     "test": "npm run build:ts && tsc -p test/tsconfig.json && c8 node --test -r ts-node/register \"test/**/*.ts\"",
-    "start": "npm run build:ts && node dist/server.js",
+    "start": "npm run build && node dist/server.js",
+    "build": "prisma generate && npm run build:ts && node scripts/copy-frontend.js",
     "dev": "npm run build:ts && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"npm:watch:ts\" \"npm:dev:start\"",
     "dev:start": "tsx watch src/server.ts",
     "build:ts": "tsc",
@@ -20,6 +21,8 @@
     "@fastify/static": "^8.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@modelcontextprotocol/server-filesystem": "^2026.1.14",
+    "@prisma/adapter-libsql": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "@types/pino": "^7.0.4",
     "better-sqlite3": "^11.10.0",
     "diff": "^9.0.0",
@@ -42,6 +45,7 @@
     "fastify-cli": "^8.0.0",
     "fastify-tsconfig": "^3.0.0",
     "pino-pretty": "^13.1.3",
+    "prisma": "^7.0.0",
     "ts-node": "^10.4.0",
     "tsx": "^4.19.0",
     "typescript": "~5.9.2"
