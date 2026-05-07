@@ -22,3 +22,7 @@ region
 rich-dad-text.txt
 dotnet-install.sh
 ecosystem.config.js
+
+# Backend generated files
+packages/backend/src/generated/prisma
+packages/backend/public
