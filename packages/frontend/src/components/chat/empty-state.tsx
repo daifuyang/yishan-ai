@@ -21,8 +21,8 @@ interface EmptyStateProps {
 
 export function EmptyState({ onSend, onStop, isStreaming, disabled, defaultModel, initialContent }: EmptyStateProps) {
   return (
-    <div className="flex flex-col h-full w-full animate-fade-in-up">
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+    <div className="h-full flex flex-col animate-fade-in-up">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-4 py-8">
         <div className="flex flex-col items-center text-center space-y-1">
           <p className="text-xl font-semibold tracking-tight">{getGreeting()}</p>
           <p className="text-sm text-muted-foreground tracking-wide">Yishan AI 助手</p>

@@ -234,8 +234,8 @@ export function MessageList({ messages, isStreaming, streamingContent, onRollbac
     lastAssistantMsg.content.some(c => c.type === 'tool_use');
 
   return (
-    <div className={cn("relative flex flex-col px-4 sm:px-6", className)}>
-      <div className="mx-auto w-full space-y-5 py-4">
+    <div className={cn("flex flex-col", className)}>
+      <div className="w-full space-y-5">
         {messages.map((msg) => (
           <div
             key={msg.id}
