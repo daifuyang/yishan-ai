@@ -6,15 +6,7 @@ import { Cog, Glasses, LayoutList, Shell, Search, CheckCircle2, XCircle, Loader2
 import { cn } from '@/lib/utils'
 import { TextShimmer } from '@/components/ui/text-shimmer'
 import { ToolCard } from './tool-card'
-
-export interface ToolCall {
-  id: string
-  name: string
-  input: Record<string, unknown>
-  output?: unknown
-  error?: string
-  status: 'pending' | 'running' | 'completed' | 'error'
-}
+import type { ToolCall, ToolCallGroup } from '@/types'
 
 interface ToolCallBlockProps {
   toolCalls: ToolCall[]
@@ -129,7 +121,6 @@ function ToolSummary({ toolCalls }: { toolCalls: ToolCall[] }) {
   return (
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-1.5">
-        <Cog className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium text-foreground">Tools</span>
       </div>
 
@@ -225,7 +216,9 @@ function BashTool({ toolCall }: { toolCall: ToolCall }) {
   const description = toolCall.input.description as string | undefined
   const output = typeof toolCall.output === 'string' ? toolCall.output : formatJson(toolCall.output)
 
-  const displayText = description ?? command ?? ''
+  // Keep subtitle semantic: prefer model-provided intent description,
+  // never leak raw command into subtitle.
+  const displayText = description || '执行命令'
   const text = `\$ ${command ?? ''}${output ? '\n' + output : ''}`
 
   const handleCopy = useCallback(async () => {
@@ -238,12 +231,6 @@ function BashTool({ toolCall }: { toolCall: ToolCall }) {
     <div className="tool-card" data-status={toolCall.status}>
       <div className="tool-card-trigger" onClick={() => !pending && setExpanded(!expanded)}>
         <div className="tool-card-trigger-content">
-          {pending && (
-            <div className="tool-card-indicator">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            </div>
-          )}
-
           <div className="tool-card-info">
             <div className="tool-card-info-structured">
               <div className="tool-card-info-main">
@@ -313,14 +300,6 @@ function ReadTool({ toolCall }: { toolCall: ToolCall }) {
     <div className="tool-card" data-status={toolCall.status}>
       <div className="tool-card-trigger" onClick={() => !pending && setExpanded(!expanded)}>
         <div className="tool-card-trigger-content">
-          <div className="tool-card-indicator">
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            ) : (
-              <Icon className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
-
           <div className="tool-card-info">
             <div className="tool-card-info-structured">
               <div className="tool-card-info-main">
@@ -378,14 +357,6 @@ function ListTool({ toolCall }: { toolCall: ToolCall }) {
     <div className="tool-card" data-status={toolCall.status}>
       <div className="tool-card-trigger" onClick={() => !pending && setExpanded(!expanded)}>
         <div className="tool-card-trigger-content">
-          <div className="tool-card-indicator">
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            ) : (
-              <Icon className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
-
           <div className="tool-card-info">
             <div className="tool-card-info-structured">
               <div className="tool-card-info-main">
@@ -444,14 +415,6 @@ function GlobTool({ toolCall }: { toolCall: ToolCall }) {
     <div className="tool-card" data-status={toolCall.status}>
       <div className="tool-card-trigger" onClick={() => !pending && setExpanded(!expanded)}>
         <div className="tool-card-trigger-content">
-          <div className="tool-card-indicator">
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            ) : (
-              <Icon className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
-
           <div className="tool-card-info">
             <div className="tool-card-info-structured">
               <div className="tool-card-info-main">
@@ -512,14 +475,6 @@ function GrepTool({ toolCall }: { toolCall: ToolCall }) {
     <div className="tool-card" data-status={toolCall.status}>
       <div className="tool-card-trigger" onClick={() => !pending && setExpanded(!expanded)}>
         <div className="tool-card-trigger-content">
-          <div className="tool-card-indicator">
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            ) : (
-              <Icon className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
-
           <div className="tool-card-info">
             <div className="tool-card-info-structured">
               <div className="tool-card-info-main">
@@ -586,14 +541,6 @@ function GenericToolItem({ toolCall }: { toolCall: ToolCall }) {
     <div className="tool-card" data-status={toolCall.status}>
       <div className="tool-card-trigger" onClick={() => !pending && setExpanded(!expanded)}>
         <div className="tool-card-trigger-content">
-          <div className="tool-card-indicator">
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            ) : (
-              <Icon className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
-
           <div className="tool-card-info">
             <div className="tool-card-info-structured">
               <div className="tool-card-info-main">
@@ -729,13 +676,6 @@ export function ToolCallBlock({ toolCalls, variant = 'full' }: ToolCallBlockProp
   )
 }
 
-export type ToolCallGroupType = 'context' | 'tool'
-
-export interface ToolCallGroup {
-  type: ToolCallGroupType
-  tools: ToolCall[]
-}
-
 export function groupToolCalls(toolCalls: ToolCall[]): ToolCallGroup[] {
   const groups: ToolCallGroup[] = []
   let currentContextGroup: ToolCall[] = []
@@ -784,12 +724,9 @@ export function ContextToolGroup({ toolCalls, defaultExpanded = false }: { toolC
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">
-              {hasActiveTools ? '正在探索' : '已探索'}
-            </span>
-          </div>
+          <span className="text-sm font-medium text-foreground">
+            {hasActiveTools ? '正在探索' : '已探索'}
+          </span>
           {runningCount > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 text-xs">
               <Loader2 className="h-3 w-3 animate-spin" />
