@@ -1,18 +1,32 @@
-const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:4800';
+import { backendFetch } from '@/lib/backend-fetch';
 
 export async function GET() {
-  const res = await fetch(`${BACKEND_URL}/api/sessions`);
-  const data = await res.json();
-  return Response.json(data);
+  try {
+    const res = await backendFetch('/api/sessions');
+    const data = await res.json();
+    return Response.json(data);
+  } catch (error) {
+    return Response.json(
+      { error: '获取会话列表失败', detail: error instanceof Error ? error.message : String(error) },
+      { status: 502 }
+    );
+  }
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const res = await fetch(`${BACKEND_URL}/api/sessions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  return Response.json(data);
+  try {
+    const body = await request.json();
+    const res = await backendFetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    return Response.json(data);
+  } catch (error) {
+    return Response.json(
+      { error: '创建会话失败', detail: error instanceof Error ? error.message : String(error) },
+      { status: 502 }
+    );
+  }
 }

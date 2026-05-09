@@ -1,13 +1,18 @@
-const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:4800';
+import { backendFetch } from '@/lib/backend-fetch';
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const res = await fetch(`${BACKEND_URL}/api/sessions/${id}/chat/stop`, {
-    method: 'POST',
-  });
-  const data = await res.json();
-  return Response.json(data);
+  try {
+    const { id } = await params;
+    const res = await backendFetch(`/api/sessions/${id}/chat/stop`, { method: 'POST' });
+    const data = await res.json();
+    return Response.json(data);
+  } catch (error) {
+    return Response.json(
+      { error: '停止流失败', detail: error instanceof Error ? error.message : String(error) },
+      { status: 502 }
+    );
+  }
 }
