@@ -10,77 +10,67 @@ interface UseChatScrollOptions {
 }
 
 export function useChatScroll({ messagesLength, isStreaming, streamingContentLength, sessionId }: UseChatScrollOptions) {
-  const containerRefInternal = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const userScrolledRef = useRef(false);
   const lastMessagesLength = useRef(messagesLength);
   const lastStreamingContentLength = useRef(streamingContentLength ?? 0);
   const pendingScrollRef = useRef(false);
-
-  const getContainer = useCallback(() => containerRefInternal.current, []);
+  const scrollHandlerRef = useRef<((() => void) | null)>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const el = getContainer();
+    const el = containerRef.current;
     if (!el) return false;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const currentEl = getContainer();
+        const currentEl = containerRef.current;
         if (!currentEl) return;
         currentEl.scrollTo({ top: currentEl.scrollHeight, behavior });
       });
     });
     return true;
-  }, [getContainer]);
+  }, []);
 
   const scrollToTop = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const el = getContainer();
+    const el = containerRef.current;
     if (!el) return;
     el.scrollTo({ top: 0, behavior });
-  }, [getContainer]);
+  }, []);
 
-  const containerRefCallback = useCallback((node: HTMLDivElement | null) => {
-    containerRefInternal.current = node;
-    if (node) {
-      const handleScroll = () => {
-        const el = containerRefInternal.current;
-        if (!el) return;
-        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-        setIsAtBottom(atBottom);
-        setShowScrollButton(!atBottom);
-        if (!atBottom && !isStreaming) {
-          userScrolledRef.current = true;
-        } else if (atBottom) {
-          userScrolledRef.current = false;
-        }
-      };
-      node.addEventListener("scroll", handleScroll, { passive: true });
-      (node as any)._scrollHandler = handleScroll;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-      if (pendingScrollRef.current && sessionId) {
-        pendingScrollRef.current = false;
-        scrollToBottom("instant");
+    const handleScroll = () => {
+      const element = containerRef.current;
+      if (!element) return;
+      const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+      setIsAtBottom(atBottom);
+      setShowScrollButton(!atBottom);
+      if (!atBottom && !isStreaming) {
+        userScrolledRef.current = true;
+      } else if (atBottom) {
+        userScrolledRef.current = false;
       }
+    };
+
+    scrollHandlerRef.current = handleScroll;
+    el.addEventListener("scroll", handleScroll, { passive: true });
+
+    if (pendingScrollRef.current && sessionId) {
+      pendingScrollRef.current = false;
+      scrollToBottom("instant");
     }
+
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+      scrollHandlerRef.current = null;
+    };
   }, [isStreaming, scrollToBottom, sessionId]);
 
   useEffect(() => {
-    const el = containerRefInternal.current;
-    if (el && (el as any)._scrollHandler) {
-      const handler = (el as any)._scrollHandler;
-      el.removeEventListener("scroll", handler);
-      delete (el as any)._scrollHandler;
-    }
-    return () => {
-      if (el && (el as any)._scrollHandler) {
-        const handler = (el as any)._scrollHandler;
-        el.removeEventListener("scroll", handler);
-      }
-    };
-  }, [containerRefCallback]);
-
-  useEffect(() => {
-    const el = getContainer();
+    const el = containerRef.current;
     if (!el) return;
 
     const isNewMessage = messagesLength !== lastMessagesLength.current;
@@ -89,10 +79,10 @@ export function useChatScroll({ messagesLength, isStreaming, streamingContentLen
     if (isNewMessage && messagesLength > 0 && !userScrolledRef.current) {
       scrollToBottom("instant");
     }
-  }, [messagesLength, scrollToBottom, getContainer]);
+  }, [messagesLength, scrollToBottom]);
 
   useEffect(() => {
-    const el = getContainer();
+    const el = containerRef.current;
     if (!el) return;
 
     const isContentGrowing = (streamingContentLength ?? 0) !== lastStreamingContentLength.current;
@@ -101,7 +91,7 @@ export function useChatScroll({ messagesLength, isStreaming, streamingContentLen
     if (isStreaming && isContentGrowing) {
       scrollToBottom("smooth");
     }
-  }, [isStreaming, streamingContentLength, scrollToBottom, getContainer]);
+  }, [isStreaming, streamingContentLength, scrollToBottom]);
 
   useEffect(() => {
     if (!isStreaming) {
@@ -116,16 +106,16 @@ export function useChatScroll({ messagesLength, isStreaming, streamingContentLen
       lastStreamingContentLength.current = 0;
       pendingScrollRef.current = true;
 
-      const el = getContainer();
+      const el = containerRef.current;
       if (el) {
         pendingScrollRef.current = false;
         scrollToBottom("instant");
       }
     }
-  }, [sessionId, scrollToBottom, getContainer]);
+  }, [sessionId, scrollToBottom]);
 
   return {
-    containerRef: containerRefCallback,
+    containerRef,
     isAtBottom,
     showScrollButton,
     scrollToBottom,
