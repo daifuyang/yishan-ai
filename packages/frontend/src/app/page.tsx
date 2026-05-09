@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useCallback, useState, useTransition } from "react";
+import React, { Suspense, useCallback, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { ChatLayout } from "@/components/layout/ChatLayout";
@@ -17,8 +17,7 @@ import { toast } from "sonner";
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const { sessions, createSession, fetchSessions } = useSessionStore();
+  const { sessions, activeId, createSession, fetchSessions, setActiveId } = useSessionStore();
   const {
     messages,
     isStreaming,
@@ -35,17 +34,18 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rollbackContent, setRollbackContent] = useState<string | undefined>();
+  const initActiveIdRef = React.useRef<string | null>(null);
 
   const hasMessages = messages.length > 0 || isStreaming;
-  const shouldShowLoading = isLoading || Boolean(sessionId && !sessions.find((s) => s.id === sessionId));
-  const isCreating = isCreatingSession || isPending;
-  const session = sessions.find((s) => s.id === sessionId);
+  const shouldShowLoading = isLoading || Boolean(activeId && !sessions.find((s) => s.id === activeId));
+  const isCreating = isCreatingSession;
+  const session = sessions.find((s) => s.id === activeId);
 
   const { containerRef, showScrollButton, scrollToBottom } = useChatScroll({
     messagesLength: messages.length,
     isStreaming,
     streamingContentLength: streamingContent?.length ?? 0,
-    sessionId,
+    sessionId: activeId,
   });
 
   // Error handling
@@ -62,58 +62,70 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     fetchSessions();
   }, [fetchConfig, fetchSessions]);
 
-  // Load messages when session changes
+  // Sync activeId from URL only on initial mount
   React.useEffect(() => {
-    if (sessionId) {
-      console.log('[page] sessionId changed:', sessionId);
+    if (initActiveIdRef.current === null) {
+      if (sessionId) {
+        setActiveId(sessionId);
+      }
+      initActiveIdRef.current = sessionId;
+    }
+  }, [sessionId, setActiveId]);
+
+  // Load messages when activeId changes
+  React.useEffect(() => {
+    if (initActiveIdRef.current === null) {
+      return;
+    }
+    if (activeId && activeId !== initActiveIdRef.current) {
+      initActiveIdRef.current = activeId;
+      console.log('[page] activeId changed:', activeId);
       setIsLoading(true);
-      fetchMessages(sessionId)
+      fetchMessages(activeId)
         .then(() => {
-          console.log('[page] fetchMessages resolved, calling scrollToBottom, messages.length:', messages.length);
+          console.log('[page] fetchMessages resolved, calling scrollToBottom');
           scrollToBottom("instant");
         })
         .catch(() => {
+          setActiveId(null);
+          initActiveIdRef.current = null;
           router.push("/");
         })
         .finally(() => {
           setIsLoading(false);
         });
-    } else {
-      clearMessages();
     }
-  }, [sessionId, fetchMessages, clearMessages, router, scrollToBottom]);
+  }, [activeId, fetchMessages, scrollToBottom, setActiveId, router]);
 
   const handleSend = useCallback(
     async (content: string, model: string, mode: "plan" | "build") => {
       setRollbackContent(undefined);
-      if (!sessionId) {
+      if (!activeId) {
         setIsCreatingSession(true);
         const newSessionId = await createSession(model);
         await sendMessage(newSessionId, content, model, mode);
         setIsCreatingSession(false);
-        startTransition(() => {
-          router.push(`/?sessionId=${newSessionId}`);
-        });
+        setActiveId(newSessionId);
       } else {
-        sendMessage(sessionId, content, model, mode);
+        sendMessage(activeId, content, model, mode);
       }
     },
-    [sessionId, createSession, sendMessage, router]
+    [activeId, createSession, sendMessage, setActiveId]
   );
 
   const handleStop = useCallback(() => {
-    if (sessionId) {
-      stopStream(sessionId);
+    if (activeId) {
+      stopStream(activeId);
     }
-  }, [sessionId, stopStream]);
+  }, [activeId, stopStream]);
 
   const handleRollback = useCallback(
     async (messageId: string, content: string) => {
-      if (!sessionId) return;
-      await rollbackMessage(sessionId, messageId);
+      if (!activeId) return;
+      await rollbackMessage(activeId, messageId);
       setRollbackContent(content);
     },
-    [sessionId, rollbackMessage]
+    [activeId, rollbackMessage]
   );
 
   const inputNode = (
