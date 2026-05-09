@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -9,11 +9,9 @@ import { Copy, Check, Bot, RotateCcw } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { ToolItem, groupToolCalls, type ToolCall } from '@/components/mcp/tool-call-block';
+import { ToolItem, groupToolCalls, ContextToolGroup, type ToolCall, type ToolCallGroup } from '@/components/mcp/tool-call-block';
 
-const markdownComponents: Components = {
-  table: ({ children }) => <table>{children}</table>,
-};
+
 
 
 
@@ -69,6 +67,23 @@ function useCopyToClipboard() {
   return { copiedId, handleCopy };
 }
 
+function extractTextFromReactNode(node: React.ReactNode): string {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (!node) return '';
+
+  if (Array.isArray(node)) {
+    return node.map(extractTextFromReactNode).join('');
+  }
+
+  if (React.isValidElement(node)) {
+    const { children } = node.props as { children?: React.ReactNode };
+    return extractTextFromReactNode(children);
+  }
+
+  return '';
+}
+
 
 
 function CopyButton({ content, id, copiedId, onCopy }: {
@@ -108,6 +123,8 @@ function AssistantBubble({
   copiedId: string | null;
   onCopy: (content: string, id: string) => void;
 }) {
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
   const textContent = typeof message.content === 'string'
     ? message.content
     : message.content.filter(c => c.type === 'text').map(c => c.text).join('');
@@ -117,19 +134,60 @@ function AssistantBubble({
     : message.content.filter(c => c.type === 'tool_use');
 
   const toolCalls = contentBlocksToToolCalls(toolUseBlocks);
+  const groups = groupToolCalls(toolCalls);
+
+  const handleCodeCopy = useCallback(async (code: string) => {
+    await navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  }, []);
+
+  const assistantMarkdownComponents: Components = {
+    table: ({ children }) => <table>{children}</table>,
+    pre: ({ children }) => {
+      const codeText = extractTextFromReactNode(children);
+      return (
+        <div className="relative group">
+          <pre className="!my-0">{children}</pre>
+          <button
+            onClick={() => handleCodeCopy(codeText)}
+            className="absolute top-2 right-2 p-1.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            title="复制代码"
+          >
+            {copiedCode === codeText ? (
+              <Check className="h-4 w-4 text-green-500" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      );
+    },
+  };
+
+  const renderGroup = (group: ToolCallGroup) => {
+    if (group.type === 'context') {
+      return <ContextToolGroup key={`context-${group.tools[0]?.id}`} toolCalls={group.tools} />;
+    }
+    return group.tools.map((tool) => (
+      <ToolItem key={tool.id} toolCall={tool} />
+    ));
+  };
 
   return (
     <div className="flex flex-col gap-2 flex-1 min-w-0">
-      {toolCalls.map((toolCall) => (
-        <ToolItem key={toolCall.id} toolCall={toolCall} />
-      ))}
+      {groups.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {groups.map(renderGroup)}
+        </div>
+      )}
 
       {textContent && (
         <div className="msg-actions-wrapper">
-<div className="bg-card text-foreground rounded max-w-full">
+<div className="bg-card text-foreground rounded max-w-full px-3 py-2">
             <div className="prose dark:prose-invert max-w-none text-[15px]">
               <ReactMarkdown
-                components={markdownComponents}
+                components={assistantMarkdownComponents}
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight]}
               >
@@ -163,8 +221,8 @@ function UserBubble({
 
   return (
     <div className="msg-actions-wrapper align-end">
-      <div className="px-3 py-0.5 sm:py-1 rounded bg-primary text-primary-foreground shadow-sm w-fit">
-        <div className="prose prose-invert max-w-none text-[15px] prose-p:my-0 prose-li:my-0">
+      <div className="px-3 py-1.5 rounded bg-primary text-primary-foreground shadow-sm w-fit">
+        <div className="prose prose-invert max-w-none text-[15px]">
           <ReactMarkdown>{textContent}</ReactMarkdown>
         </div>
       </div>
@@ -188,7 +246,7 @@ function UserBubble({
 
 function BotAvatar() {
   return (
-    <Avatar className="h-10 w-10 shrink-0 mt-0">
+    <Avatar className="h-10 w-10 shrink-0 mt-0 hidden sm:flex">
       <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/10">
         <Bot className="h-5 w-5" />
       </AvatarFallback>
@@ -209,17 +267,71 @@ function StreamingIndicator() {
 }
 
 function StreamingBubble({ content }: { content: string }) {
+  const [isTyping, setIsTyping] = useState(true);
+  const [showCursor, setShowCursor] = useState(true);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const prevContentLength = useRef(content.length);
+
+  useEffect(() => {
+    const currentLength = content.length;
+    if (currentLength > prevContentLength.current) {
+      setIsTyping(true);
+      setShowCursor(true);
+    } else if (currentLength > 0 && currentLength === prevContentLength.current) {
+      setIsTyping(false);
+    }
+    prevContentLength.current = currentLength;
+  }, [content]);
+
+  useEffect(() => {
+    if (!isTyping && content.length > 0) {
+      const timer = setTimeout(() => setShowCursor(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isTyping, content.length]);
+
+  const handleCodeCopy = useCallback(async (code: string) => {
+    await navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  }, []);
+
+  const streamingMarkdownComponents: Components = {
+    table: ({ children }) => <table>{children}</table>,
+    pre: ({ children }) => {
+      const codeText = extractTextFromReactNode(children);
+      return (
+        <div className="relative group">
+          <pre className="!my-0">{children}</pre>
+          <button
+            onClick={() => handleCodeCopy(codeText)}
+            className="absolute top-2 right-2 p-1.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            title="复制代码"
+          >
+            {copiedCode === codeText ? (
+              <Check className="h-4 w-4 text-green-500" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      );
+    },
+  };
+
   return (
-    <div className="bg-card text-foreground rounded max-w-full">
+    <div className="bg-card text-foreground rounded max-w-full px-3 py-2">
       <div className="prose dark:prose-invert max-w-none text-[15px]">
         <ReactMarkdown
-          components={markdownComponents}
+          components={streamingMarkdownComponents}
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
         >
           {content}
         </ReactMarkdown>
-        <span className="inline-block ml-1 animate-pulse">▌</span>
+        {showCursor && (
+          <span className={isTyping ? 'inline-block ml-1' : 'inline-block ml-1 blinking-cursor'}>│</span>
+        )}
       </div>
     </div>
   );

@@ -114,6 +114,19 @@
   animation: bounce 1s infinite;
 }
 
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.blinking-cursor {
+  animation: blink 1s step-end infinite;
+}
+
 .prose {
   code {
     @apply bg-muted/80 px-1.5 py-0.5 rounded text-[13px] font-mono border border-border/50;
@@ -128,7 +141,11 @@
   }
 
   p {
-    @apply my-3 leading-relaxed;
+    @apply my-0 leading-relaxed;
+  }
+
+  p + p {
+    @apply mt-2;
   }
 
   ul, ol {
@@ -136,7 +153,11 @@
   }
 
   li {
-    @apply my-1.5 leading-relaxed;
+    @apply my-0 leading-relaxed;
+  }
+
+  li + li {
+    @apply mt-1;
   }
 
   blockquote {
