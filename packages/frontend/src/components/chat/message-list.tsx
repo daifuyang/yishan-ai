@@ -1,44 +1,21 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Bot, RotateCcw } from 'lucide-react';
+import { Copy, Check, Bot, RotateCcw, RefreshCw } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { ToolItem, groupToolCalls, ContextToolGroup, type ToolCall, type ToolCallGroup } from '@/components/mcp/tool-call-block';
-
-
-
-
-
-interface ContentBlock {
-  type: 'text' | 'tool_use';
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: Record<string, unknown>;
-  result?: string;
-  error?: string;
-}
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  type?: 'user' | 'assistant' | 'final';
-  content: string | ContentBlock[];
-  thinking?: string;
-  toolCalls?: ToolCall[];
-}
+import { ToolItem, groupToolCalls, ContextToolGroup } from '@/components/mcp/tool-call-block';
+import type { Message, ContentBlock, ToolCall, ToolCallGroup } from '@/types';
 
 interface MessageListProps {
   messages: Message[];
-  isStreaming: boolean;
-  streamingContent: string;
   onRollback?: (messageId: string, content: string) => void;
+  onRetry?: (messageId: string, model: string, mode: 'plan' | 'build') => void;
   className?: string;
 }
 
@@ -124,6 +101,7 @@ function AssistantBubble({
   onCopy: (content: string, id: string) => void;
 }) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const isPending = message.status === 'pending';
 
   const textContent = typeof message.content === 'string'
     ? message.content
@@ -143,7 +121,13 @@ function AssistantBubble({
   }, []);
 
   const assistantMarkdownComponents: Components = {
-    table: ({ children }) => <table>{children}</table>,
+    table: ({ children }) => (
+      <div className="chat-table-scroll w-full max-w-full overflow-x-auto">
+        <table className="!w-max min-w-max">{children}</table>
+      </div>
+    ),
+    th: ({ children }) => <th className="whitespace-nowrap">{children}</th>,
+    td: ({ children }) => <td className="whitespace-nowrap">{children}</td>,
     pre: ({ children }) => {
       const codeText = extractTextFromReactNode(children);
       return (
@@ -174,6 +158,14 @@ function AssistantBubble({
     ));
   };
 
+  if (isPending && !textContent) {
+    return (
+      <div className="flex flex-col gap-2 flex-1 min-w-0">
+        <StreamingIndicator />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2 flex-1 min-w-0">
       {groups.length > 0 && (
@@ -183,21 +175,22 @@ function AssistantBubble({
       )}
 
       {textContent && (
-        <div className="msg-actions-wrapper">
-<div className="bg-card text-foreground rounded max-w-full px-3 py-2">
-            <div className="prose dark:prose-invert max-w-none text-[15px]">
-              <ReactMarkdown
-                components={assistantMarkdownComponents}
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-              >
-                {textContent}
-              </ReactMarkdown>
+        <div className="msg-actions-wrapper w-full max-w-full overflow-hidden">
+          <div className="prose dark:prose-invert max-w-none text-[15px] w-full min-w-0">
+            <ReactMarkdown
+              components={assistantMarkdownComponents}
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+            >
+              {textContent}
+            </ReactMarkdown>
+            {isPending && <span className="inline-block ml-1 blinking-cursor">│</span>}
+          </div>
+          {!isPending && (
+            <div className="msg-action-btn">
+              <CopyButton content={textContent} id={message.id} copiedId={copiedId} onCopy={onCopy} />
             </div>
-          </div>
-          <div className="msg-action-btn">
-            <CopyButton content={textContent} id={message.id} copiedId={copiedId} onCopy={onCopy} />
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -209,25 +202,50 @@ function UserBubble({
   copiedId,
   onCopy,
   onRollback,
+  onRetry,
 }: {
   message: Message;
   copiedId: string | null;
   onCopy: (content: string, id: string) => void;
   onRollback?: (messageId: string, content: string) => void;
+  onRetry?: (messageId: string, model: string, mode: 'plan' | 'build') => void;
 }) {
   const textContent = typeof message.content === 'string'
     ? message.content
-    : JSON.stringify(message.content);
+    : message.content
+        .filter((c) => c.type === 'text')
+        .map((c) => c.text)
+        .join('') || JSON.stringify(message.content);
+
+  const isFailed = message.status === 'failed';
+  const isPending = message.status === 'pending';
 
   return (
     <div className="msg-actions-wrapper align-end">
-      <div className="px-3 py-1.5 rounded bg-primary text-primary-foreground shadow-sm w-fit">
-        <div className="prose prose-invert max-w-none text-[15px]">
+      <div className={cn(
+        "px-3 py-2 rounded shadow-sm",
+        isFailed ? "bg-red-500/20 border border-red-500/50" : "bg-primary text-primary-foreground"
+      )}>
+        <div className="prose prose-sm prose-invert max-w-none text-[15px] [&>p]:my-0 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">
           <ReactMarkdown>{textContent}</ReactMarkdown>
         </div>
+        {isFailed && message.error && (
+          <div className="text-xs text-red-400 mt-1">{message.error}</div>
+        )}
       </div>
       <div className="msg-action-btn flex gap-1 mt-1">
-        {onRollback && (
+        {isFailed && onRetry && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-red-500 hover:text-red-400 gap-1 [&_svg]:size-3"
+            onClick={() => onRetry(message.id, message.model || 'MiniMax-M2.7', 'build')}
+          >
+            <RefreshCw className="h-3 w-3" />
+            重试
+          </Button>
+        )}
+        {onRollback && !isFailed && !isPending && (
           <Button
             variant="ghost"
             size="sm"
@@ -256,7 +274,7 @@ function BotAvatar() {
 
 function StreamingIndicator() {
   return (
-    <div className="bg-card h-10 mt-0 flex items-center justify-start">
+    <div className="h-8 mt-0 flex items-center justify-start">
       <div className="flex gap-1.5">
         <Skeleton className="h-2 w-2 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
         <Skeleton className="h-2 w-2 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -266,117 +284,31 @@ function StreamingIndicator() {
   );
 }
 
-function StreamingBubble({ content }: { content: string }) {
-  const [isTyping, setIsTyping] = useState(true);
-  const [showCursor, setShowCursor] = useState(true);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const prevContentLength = useRef(content.length);
-
-  useEffect(() => {
-    const currentLength = content.length;
-    if (currentLength > prevContentLength.current) {
-      setIsTyping(true);
-      setShowCursor(true);
-    } else if (currentLength > 0 && currentLength === prevContentLength.current) {
-      setIsTyping(false);
-    }
-    prevContentLength.current = currentLength;
-  }, [content]);
-
-  useEffect(() => {
-    if (!isTyping && content.length > 0) {
-      const timer = setTimeout(() => setShowCursor(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isTyping, content.length]);
-
-  const handleCodeCopy = useCallback(async (code: string) => {
-    await navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  }, []);
-
-  const streamingMarkdownComponents: Components = {
-    table: ({ children }) => <table>{children}</table>,
-    pre: ({ children }) => {
-      const codeText = extractTextFromReactNode(children);
-      return (
-        <div className="relative group">
-          <pre className="!my-0">{children}</pre>
-          <button
-            onClick={() => handleCodeCopy(codeText)}
-            className="absolute top-2 right-2 p-1.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-            title="复制代码"
-          >
-            {copiedCode === codeText ? (
-              <Check className="h-4 w-4 text-green-500" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-      );
-    },
-  };
-
-  return (
-    <div className="bg-card text-foreground rounded max-w-full px-3 py-2">
-      <div className="prose dark:prose-invert max-w-none text-[15px]">
-        <ReactMarkdown
-          components={streamingMarkdownComponents}
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeHighlight]}
-        >
-          {content}
-        </ReactMarkdown>
-        {showCursor && (
-          <span className={isTyping ? 'inline-block ml-1' : 'inline-block ml-1 blinking-cursor'}>│</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function MessageList({ messages, isStreaming, streamingContent, onRollback, className }: MessageListProps) {
+export function MessageList({ messages, onRollback, onRetry, className }: MessageListProps) {
   const { copiedId, handleCopy } = useCopyToClipboard();
-
-  const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
-  const hasToolUseBlocks = lastAssistantMsg &&
-    typeof lastAssistantMsg.content !== 'string' &&
-    lastAssistantMsg.content.some(c => c.type === 'tool_use');
 
   return (
     <div className={cn("flex flex-col", className)}>
       <div className="w-full space-y-5">
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={cn(
-              'flex gap-4 animate-fade-in-up',
-              msg.role === 'user' ? 'justify-end' : 'justify-start'
-            )}
-          >
-            {msg.role === 'assistant' && <BotAvatar />}
-            {msg.role === 'user' ? (
-              <UserBubble message={msg} copiedId={copiedId} onCopy={handleCopy} onRollback={onRollback} />
+          <div key={msg.id} className="flex w-full items-start gap-2 sm:gap-4 animate-fade-in-up">
+            {msg.role === 'assistant' ? (
+              <>
+                <BotAvatar />
+                <div className="w-full min-w-0 mr-auto">
+                  <AssistantBubble message={msg} copiedId={copiedId} onCopy={handleCopy} />
+                </div>
+              </>
             ) : (
-              <AssistantBubble message={msg} copiedId={copiedId} onCopy={handleCopy} />
+              <>
+                <div className="w-full min-w-0 ml-auto sm:w-auto sm:max-w-[85%]">
+                  <UserBubble message={msg} copiedId={copiedId} onCopy={handleCopy} onRollback={onRollback} onRetry={onRetry} />
+                </div>
+                <div className="w-10 shrink-0 hidden sm:block" aria-hidden />
+              </>
             )}
           </div>
         ))}
-
-        {isStreaming && !hasToolUseBlocks && (
-          <div className="flex gap-4 justify-start animate-fade-in-up">
-            <BotAvatar />
-            <div className="flex flex-col gap-2 flex-1 min-w-0">
-              {streamingContent ? (
-                <StreamingBubble content={streamingContent} />
-              ) : (
-                <StreamingIndicator />
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

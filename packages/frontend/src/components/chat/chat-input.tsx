@@ -66,9 +66,14 @@ export function ChatInput({
     adjustHeight();
   }, [content, adjustHeight]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (!content.trim() || disabled || isStreaming || model === 'no-model') return;
-    onSend(content, model, mode);
+    const currentContent = content;
+    try {
+      await onSend(currentContent, model, mode);
+    } catch (error) {
+      return;
+    }
     setContent('');
     adjustHeight();
   }, [content, model, mode, disabled, isStreaming, onSend, adjustHeight]);
@@ -84,7 +89,7 @@ export function ChatInput({
   const modelList = models.models.length > 0 ? models.models : [{ id: 'no-model', name: '暂无' }];
 
   return (
-    <div className={noBorder ? 'p-3' : 'w-full border rounded-2xl glass'}>
+    <div className={noBorder ? '' : 'w-full border rounded-2xl glass'}>
       <Textarea
         ref={textareaRef}
         value={content}
@@ -92,6 +97,9 @@ export function ChatInput({
         onKeyDown={handleKeyDown}
         placeholder={isStreaming ? 'AI 正在回复...' : '输入消息...'}
         disabled={isDisabled}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck="false"
         className="w-full border-0 shadow-none focus-visible:ring-0 resize-none mt-1 mb-3 text-[15px] bg-transparent chat-input-textarea"
       />
       <div className="flex flex-nowrap items-center gap-2 sm:gap-3 px-2 sm:px-3 pb-2 sm:pb-3">
