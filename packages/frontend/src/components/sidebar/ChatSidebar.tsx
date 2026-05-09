@@ -89,13 +89,7 @@ function ChatContent({ sessionId }: ChatContentProps) {
         </div>
       ) : (
         <div className="flex-1 p-4">
-          <EmptyState
-            onSend={handleSend}
-            onStop={handleStop}
-            isStreaming={isStreaming}
-            disabled={false}
-            defaultModel={session?.model}
-          />
+          <EmptyState />
         </div>
       )}
     </div>

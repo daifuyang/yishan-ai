@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiUrl } from '@/lib/api-base';
 
 export interface MCPServer {
   name: string;
@@ -32,20 +33,18 @@ interface MCPSStore {
   fetchTools: () => Promise<void>;
 }
 
-const API_BASE = '';
-
 export const useMCPSStore = create<MCPSStore>((set, get) => ({
   servers: [],
   tools: [],
 
   fetchServers: async () => {
-    const res = await fetch(`${API_BASE}/api/mcp/servers`);
+    const res = await fetch(apiUrl('/api/mcp/servers'));
     const servers = await res.json();
     set({ servers });
   },
 
   addServer: async (name: string, config: MCPServer['config']) => {
-    await fetch(`${API_BASE}/api/mcp/servers`, {
+    await fetch(apiUrl('/api/mcp/servers'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, config }),
@@ -54,7 +53,7 @@ export const useMCPSStore = create<MCPSStore>((set, get) => ({
   },
 
   updateServer: async (name: string, updates: { config?: MCPServer['config']; enabled?: boolean }) => {
-    await fetch(`${API_BASE}/api/mcp/servers/${name}`, {
+    await fetch(apiUrl(`/api/mcp/servers/${name}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -64,23 +63,23 @@ export const useMCPSStore = create<MCPSStore>((set, get) => ({
   },
 
   removeServer: async (name: string) => {
-    await fetch(`${API_BASE}/api/mcp/servers/${name}`, { method: 'DELETE' });
+    await fetch(apiUrl(`/api/mcp/servers/${name}`), { method: 'DELETE' });
     await get().fetchServers();
   },
 
   connectServer: async (name: string) => {
-    await fetch(`${API_BASE}/api/mcp/servers/${name}/connect`, { method: 'POST' });
+    await fetch(apiUrl(`/api/mcp/servers/${name}/connect`), { method: 'POST' });
     await get().fetchServers();
     await get().fetchTools();
   },
 
   disconnectServer: async (name: string) => {
-    await fetch(`${API_BASE}/api/mcp/servers/${name}/disconnect`, { method: 'POST' });
+    await fetch(apiUrl(`/api/mcp/servers/${name}/disconnect`), { method: 'POST' });
     await get().fetchServers();
   },
 
   fetchTools: async () => {
-    const res = await fetch(`${API_BASE}/api/mcp/tools`);
+    const res = await fetch(apiUrl('/api/mcp/tools'));
     const tools = await res.json();
     set({ tools });
   },

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiUrl } from '@/lib/api-base';
 
 export interface ToolCall {
   id: string;
@@ -44,8 +45,6 @@ interface ChatStore {
   rollbackMessage: (sessionId: string, messageId: string) => Promise<string | null>;
 }
 
-const API_BASE = '';
-
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   isStreaming: false,
@@ -54,7 +53,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   errorMessage: null,
 
   fetchMessages: async (sessionId) => {
-    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`);
+    const res = await fetch(apiUrl(`/api/sessions/${sessionId}`));
     const data = await res.json();
 
     if (data.messages) {
@@ -135,7 +134,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       existingSource.close();
     }
 
-    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/chat/stream`, {
+    const res = await fetch(apiUrl(`/api/sessions/${sessionId}/chat/stream`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, model, mode }),
@@ -150,7 +149,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }));
     }
 
-    const eventSource = new EventSource(`${API_BASE}/api/sessions/${sessionId}/chat/subscribe`);
+    const eventSource = new EventSource(apiUrl(`/api/sessions/${sessionId}/chat/subscribe`));
     set({ currentEventSource: eventSource });
 
     const messageHandler = (event: MessageEvent) => {
@@ -276,7 +275,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       existingSource.close();
     }
 
-    const eventSource = new EventSource(`${API_BASE}/api/sessions/${sessionId}/chat/subscribe`);
+    const eventSource = new EventSource(apiUrl(`/api/sessions/${sessionId}/chat/subscribe`));
     set({ currentEventSource: eventSource });
 
     eventSource.onmessage = (event) => {
@@ -411,7 +410,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (eventSource) {
       eventSource.close();
     }
-    await fetch(`${API_BASE}/api/sessions/${sessionId}/chat/stop`, { method: 'POST' });
+    await fetch(apiUrl(`/api/sessions/${sessionId}/chat/stop`), { method: 'POST' });
     set({ isStreaming: false, streamingContent: '', currentEventSource: null });
   },
 
@@ -430,7 +429,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       existingSource.close();
     }
 
-    await fetch(`${API_BASE}/api/sessions/${sessionId}/messages?from=${messageId}`, {
+    await fetch(apiUrl(`/api/sessions/${sessionId}/messages?from=${messageId}`), {
       method: 'DELETE',
     });
 

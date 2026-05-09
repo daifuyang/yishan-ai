@@ -92,9 +92,9 @@ export function ChatInput({
         onKeyDown={handleKeyDown}
         placeholder={isStreaming ? 'AI 正在回复...' : '输入消息...'}
         disabled={isDisabled}
-        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none mb-3 text-[15px] bg-transparent chat-input-textarea"
+        className="w-full border-0 shadow-none focus-visible:ring-0 resize-none mt-1 mb-3 text-[15px] bg-transparent chat-input-textarea"
       />
-      <div className="flex flex-nowrap items-center gap-2 sm:gap-3 overflow-x-auto px-2 sm:px-3 pb-2 sm:pb-3">
+      <div className="flex flex-nowrap items-center gap-2 sm:gap-3 px-2 sm:px-3 pb-2 sm:pb-3">
         <Select value={mode} onValueChange={(v) => setMode(v as ChatMode)} disabled={isDisabled}>
           <SelectTrigger className="w-[60px] sm:w-[80px] h-8 text-sm border-muted-foreground/20 px-1">
             <SelectValue placeholder="模式" />
@@ -106,7 +106,7 @@ export function ChatInput({
         </Select>
 
         <Select value={model} onValueChange={setModel} disabled={isDisabled}>
-          <SelectTrigger className="w-[120px] sm:w-auto sm:flex-1 h-8 text-sm border-muted-foreground/20 truncate pr-6">
+          <SelectTrigger className="w-[120px] sm:w-auto h-8 text-sm border-muted-foreground/20 truncate pr-6">
             <SelectValue className="truncate" />
           </SelectTrigger>
           <SelectContent>

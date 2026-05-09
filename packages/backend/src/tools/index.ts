@@ -6,10 +6,11 @@ import { createEditTool } from './edit.js'
 import { createListTool } from './list.js'
 import { createGlobTool } from './glob.js'
 import { createGrepTool } from './grep.js'
-import { createWebFetchTool } from './webfetch.js'
-import { createWebSearchTool } from './websearch.js'
+// import { createWebFetchTool } from './webfetch.js'
+// import { createWebSearchTool } from './websearch.js'
 import { createTodoWriteTool } from './todo.js'
 import { createTaskTool } from './task.js'
+import { createTimeTool } from './time.js'
 
 export { toolRegistry, registry as toolRegistryInstance } from './registry.js'
 export { sanitize, sanitizeObject } from './sanitize.js'
@@ -33,10 +34,11 @@ function registerAllTools() {
   toolRegistry.register(createListTool())
   toolRegistry.register(createGlobTool())
   toolRegistry.register(createGrepTool())
-  toolRegistry.register(createWebFetchTool())
-  toolRegistry.register(createWebSearchTool())
+  // toolRegistry.register(createWebFetchTool())
+  // toolRegistry.register(createWebSearchTool())
   toolRegistry.register(createTodoWriteTool())
   toolRegistry.register(createTaskTool())
+  toolRegistry.register(createTimeTool())
 
   console.log(`[Tools] Registered ${toolRegistry.listNames().length} tools`)
 }

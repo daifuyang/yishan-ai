@@ -26,7 +26,7 @@ export function ChatInputWrapper({
   showPadding = true,
 }: ChatInputWrapperProps) {
   return (
-    <div className={`w-full max-w-3xl mx-auto ${showPadding ? 'px-4 sm:px-0' : ''}`}>
+    <div className={`w-full ${showPadding ? 'px-4 sm:px-0' : ''}`}>
       <ChatInput
         onSend={onSend}
         onStop={onStop}

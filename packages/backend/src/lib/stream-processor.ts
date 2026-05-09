@@ -55,10 +55,13 @@ class StreamProcessor extends EventEmitter {
   async submitTask(params: {
     sessionId: string;
     userMessage: string;
+    mode: 'plan' | 'build';
     systemPrompt: string;
+    planReminder?: string;
+    buildSwitch?: string;
     tools: any[];
   }): Promise<{ messageId: string; queued: boolean }> {
-    const { sessionId, userMessage, systemPrompt, tools } = params;
+    const { sessionId, userMessage, mode, systemPrompt, planReminder, buildSwitch, tools } = params;
 
     if (this.runningTasks.has(sessionId)) {
       return { messageId: '', queued: true };
@@ -76,6 +79,7 @@ class StreamProcessor extends EventEmitter {
         role: 'user',
         type: 'user',
         content: userMessage,
+        mode,
       },
     });
 
@@ -86,7 +90,7 @@ class StreamProcessor extends EventEmitter {
       data: { status: 'streaming', streamingContent: '' },
     });
 
-    this.processTask(sessionId, systemPrompt, tools, abortController.signal).catch((err) => {
+    this.processTask(sessionId, mode, systemPrompt, planReminder, buildSwitch, tools, abortController.signal).catch((err) => {
       console.error(`[STREAM_PROC] Task ${sessionId} failed:`, err.message);
       let errorMessage = err.message;
       if (errorMessage.includes('Could not resolve authentication') || errorMessage.includes('apiKey')) {
@@ -160,7 +164,15 @@ class StreamProcessor extends EventEmitter {
     return this.runningTasks.has(sessionId);
   }
 
-  private async processTask(sessionId: string, systemPrompt: string, tools: any[], signal: AbortSignal) {
+  private async processTask(
+    sessionId: string,
+    mode: 'plan' | 'build',
+    systemPrompt: string,
+    planReminder: string | undefined,
+    buildSwitch: string | undefined,
+    tools: any[],
+    signal: AbortSignal
+  ) {
     this.currentTools = tools;
     signal.addEventListener('abort', () => {
       console.log(`[STREAM_PROC] Task ${sessionId} cancelled`);
@@ -280,11 +292,23 @@ class StreamProcessor extends EventEmitter {
           description: t.description,
           input_schema: t.inputSchema || t.input_schema || { type: 'object', properties: {} },
         }));
+
+        const wasPlanMode = messages.some(
+          (m) => m.role === 'assistant' && m.mode === 'plan'
+        );
+
+        let effectiveSystemPrompt = systemPrompt;
+        if (mode === 'plan' && !wasPlanMode && planReminder) {
+          effectiveSystemPrompt += '\n\n' + planReminder;
+        } else if (mode === 'build' && wasPlanMode && buildSwitch) {
+          effectiveSystemPrompt += '\n\n' + buildSwitch;
+        }
+
         const stream = client.messages.stream({
           model,
           max_tokens: 4096,
           temperature: 1,
-          system: systemPrompt,
+          system: effectiveSystemPrompt,
           messages: formattedMessages,
           tools: apiTools,
         });
@@ -478,6 +502,7 @@ class StreamProcessor extends EventEmitter {
                 role: 'assistant',
                 type: 'final',
                 content: pendingAssistantContent,
+                mode,
               },
             }).catch((e) => {
               console.error('[DB_ERROR] Failed to save final assistant text:', e.message);
@@ -512,6 +537,7 @@ class StreamProcessor extends EventEmitter {
               role: 'assistant',
               type: 'final',
               content: JSON.stringify(toolUseBlocks),
+              mode,
             },
           }).catch((e) => {
             console.error('[DB_ERROR] Failed to save assistant message:', e.message);

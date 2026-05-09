@@ -533,7 +533,84 @@ lib/
 }
 ```
 
-## 15.9 Phase 规划
+## 15.9 工具卡片渲染
+
+### 工具分组逻辑
+
+参考 Opencode 的设计，工具分为两类：
+
+| 工具类型 | 工具名 | 渲染方式 |
+|---------|--------|---------|
+| **Context Tools** | `read`, `glob`, `grep`, `list` | 聚合到 `ContextToolGroup` |
+| **Action Tools** | `bash`, `write`, `edit`, `task` 等 | 直接渲染为独立工具卡 |
+
+**分组算法** (`groupToolCalls` 函数):
+
+```typescript
+const CONTEXT_GROUP_TOOLS = new Set(['read', 'glob', 'grep', 'list'])
+
+function groupToolCalls(toolCalls: ToolCall[]): ToolCallGroup[] {
+  // 连续出现的 context tools 聚合为一个 context 组
+  // 非 context tools 各自独立渲染
+}
+```
+
+**渲染层级**:
+
+```
+AssistantBubble
+├── ContextToolGroup (当有连续 context tools 时)
+│   └── [ReadTool, ListTool, GlobTool, ...]
+├── ToolItem (bash)        ← 直接渲染，无额外包裹
+├── ToolItem (write)       ← 直接渲染，无额外包裹
+├── ToolItem (edit)        ← 直接渲染，无额外包裹
+└── ...
+```
+
+### ContextToolGroup 文案
+
+参考 Opencode 的中文翻译：
+
+| 状态 | 文案 |
+|------|------|
+| 进行中 | `正在探索` |
+| 完成 | `已探索` |
+
+**摘要统计**:
+- `X 次读取` - read 操作计数
+- `X 次搜索` - glob/grep/search 操作计数
+- `X 个列表` - list 操作计数
+
+**展开/收起**:
+- 展开：`详情`
+- 收起：`收起`
+
+### 流式光标
+
+**实现方式** (`StreamingBubble` 组件):
+
+| 状态 | 光标行为 |
+|------|---------|
+| 打字中 | 显示 `│`，不闪烁 |
+| 打字完成 | 显示 `│`，闪烁 (`blinking-cursor`) |
+| 完成后 2 秒 | 光标自动隐藏 |
+
+**CSS 动画** (`globals.scss`):
+
+```scss
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.blinking-cursor {
+  animation: blink 1s step-end infinite;
+}
+```
+
+**关键点**: 使用 `step-end` 时序函数，创建锐利的、数字感十足的闪烁效果。
+
+## 15.10 Phase 规划
 
 | 特征 | Phase 1 | 后续 |
 |------|---------|------|

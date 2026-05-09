@@ -31,6 +31,7 @@ model Message {
   type      String    @default("user")
   content    String
   toolCalls  String?
+  mode       String?
   deletedAt  DateTime?
   createdAt  DateTime  @default(now())
   usageInput  Int?

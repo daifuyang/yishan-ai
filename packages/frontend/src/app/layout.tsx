@@ -1,6 +1,7 @@
 import './globals.scss';
 import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
+import { VConsoleProvider } from '@/components/vconsole-provider';
 
 export const metadata: Metadata = {
   title: 'Yishan AI',
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="zh">
       <body className="antialiased">
+        <VConsoleProvider />
         {children}
         <Toaster position="top-right" />
       </body>

@@ -9,12 +9,11 @@ import { useChatStore } from "@/stores/chat-store";
 import { useConfigStore } from "@/stores/config-store";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInputWrapper } from "@/components/chat/chat-input-wrapper";
-import { EmptyState } from "@/components/chat/empty-state";
+import { ChatMain } from "@/components/chat/chat-main";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { useChatScroll } from "@/hooks/use-chat-scroll";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { ArrowDown } from "lucide-react";
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
@@ -38,17 +37,15 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const [rollbackContent, setRollbackContent] = useState<string | undefined>();
 
   const hasMessages = messages.length > 0 || isStreaming;
-  const shouldShowLoading = isLoading || (sessionId && !sessions.find((s) => s.id === sessionId));
+  const shouldShowLoading = isLoading || Boolean(sessionId && !sessions.find((s) => s.id === sessionId));
   const isCreating = isCreatingSession || isPending;
   const session = sessions.find((s) => s.id === sessionId);
 
-  const {
-    containerRef,
-    showScrollButton,
-    scrollToBottom,
-  } = useChatScroll({
+  const { containerRef, showScrollButton, scrollToBottom } = useChatScroll({
     messagesLength: messages.length,
     isStreaming,
+    streamingContentLength: streamingContent?.length ?? 0,
+    sessionId,
   });
 
   // Error handling
@@ -68,8 +65,13 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   // Load messages when session changes
   React.useEffect(() => {
     if (sessionId) {
+      console.log('[page] sessionId changed:', sessionId);
       setIsLoading(true);
       fetchMessages(sessionId)
+        .then(() => {
+          console.log('[page] fetchMessages resolved, calling scrollToBottom, messages.length:', messages.length);
+          scrollToBottom("instant");
+        })
         .catch(() => {
           router.push("/");
         })
@@ -79,7 +81,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     } else {
       clearMessages();
     }
-  }, [sessionId, fetchMessages, clearMessages, router]);
+  }, [sessionId, fetchMessages, clearMessages, router, scrollToBottom]);
 
   const handleSend = useCallback(
     async (content: string, model: string, mode: "plan" | "build") => {
@@ -114,67 +116,38 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     [sessionId, rollbackMessage]
   );
 
+  const inputNode = (
+    <ChatInputWrapper
+      onSend={handleSend}
+      onStop={handleStop}
+      isStreaming={isStreaming}
+      disabled={isCreating}
+      defaultModel={session?.model}
+      initialContent={rollbackContent}
+      showPadding={false}
+    />
+  );
+
   return (
     <div className="flex flex-col h-dvh">
       <ChatHeader title={session?.title || "新对话"} />
 
-      <div className="flex-1 overflow-hidden relative">
-        {shouldShowLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-          </div>
-        ) : (
-          <div
-            ref={containerRef}
-            className="h-full overflow-y-auto scrollbar-thin scroll-smooth"
-          >
-            {hasMessages ? (
-              <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-4">
-                <MessageList
-                  messages={messages}
-                  isStreaming={isStreaming}
-                  streamingContent={streamingContent}
-                  onRollback={handleRollback}
-                />
-              </div>
-            ) : (
-              <EmptyState
-                onSend={handleSend}
-                onStop={handleStop}
-                isStreaming={isStreaming}
-                disabled={isCreating}
-                defaultModel={session?.model}
-                initialContent={rollbackContent}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Scroll to bottom button */}
-        {showScrollButton && (
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => scrollToBottom("smooth")}
-            className="absolute bottom-4 right-6 h-9 w-9 rounded-full bg-background/95 backdrop-blur shadow-md border-muted-foreground/20"
-          >
-            <ArrowDown className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      <div className="shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="max-w-3xl mx-auto p-4">
-          <ChatInputWrapper
-            onSend={handleSend}
-            onStop={handleStop}
+      <ChatMain
+        hasMessages={hasMessages}
+        shouldShowLoading={shouldShowLoading}
+        containerRef={containerRef}
+        showScrollButton={showScrollButton}
+        scrollToBottom={scrollToBottom}
+        messages={
+          <MessageList
+            messages={messages}
             isStreaming={isStreaming}
-            disabled={isCreating}
-            defaultModel={session?.model}
-            initialContent={rollbackContent}
+            streamingContent={streamingContent}
+            onRollback={handleRollback}
           />
-        </div>
-      </div>
+        }
+        input={inputNode}
+      />
     </div>
   );
 }
@@ -192,7 +165,7 @@ export default function HomePage() {
       <Suspense
         fallback={
           <div className="flex items-center justify-center h-dvh">
-            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+            <LoadingSpinner />
           </div>
         }
       >

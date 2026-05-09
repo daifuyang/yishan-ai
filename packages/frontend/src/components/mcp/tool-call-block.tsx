@@ -759,6 +759,137 @@ export function groupToolCalls(toolCalls: ToolCall[]): ToolCallGroup[] {
   return groups
 }
 
+function contextToolSummary(parts: ToolCall[]) {
+  const read = parts.filter((part) => part.name === 'read').length
+  const search = parts.filter((part) => ['glob', 'grep', 'search'].includes(part.name)).length
+  const list = parts.filter((part) => part.name === 'list').length
+  return { read, search, list }
+}
+
+export function ContextToolGroup({ toolCalls, defaultExpanded = false }: { toolCalls: ToolCall[]; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const summary = contextToolSummary(toolCalls)
+  const runningCount = toolCalls.filter((t) => t.status === 'pending' || t.status === 'running').length
+  const hasActiveTools = toolCalls.some(t => t.status === 'pending' || t.status === 'running')
+
+  const summaryParts: string[] = []
+  if (summary.read > 0) summaryParts.push(`${summary.read} 次读取`)
+  if (summary.search > 0) summaryParts.push(`${summary.search} 次搜索`)
+  if (summary.list > 0) summaryParts.push(`${summary.list} 个列表`)
+
+  return (
+    <div className="tool-group">
+      <div
+        className="tool-group-header"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">
+              {hasActiveTools ? '正在探索' : '已探索'}
+            </span>
+          </div>
+          {runningCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 text-xs">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="font-medium">{runningCount}</span>
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {summaryParts.join(', ')}
+          </span>
+        </div>
+        <div className="tool-group-header-actions">
+          <span className="text-xs text-muted-foreground">
+            {expanded ? '收起' : '详情'}
+          </span>
+          <motion.span
+            animate={{ rotate: expanded ? 90 : 0 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </motion.span>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            className="tool-group-content"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ type: 'spring', visualDuration: 0.35, bounce: 0 }}
+          >
+            <div className="tool-group-content-inner">
+              {toolCalls.map((tool) => (
+                <ToolItem key={tool.id} toolCall={tool} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+export function IndependentToolGroup({ toolCalls, defaultExpanded = false }: { toolCalls: ToolCall[]; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const runningCount = toolCalls.filter((t) => t.status === 'pending' || t.status === 'running').length
+
+  return (
+    <div className="tool-group">
+      <div
+        className="tool-group-header"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <Cog className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Tools</span>
+          </div>
+          {runningCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 text-xs">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="font-medium">{runningCount}</span>
+            </span>
+          )}
+        </div>
+        <div className="tool-group-header-actions">
+          <span className="text-xs text-muted-foreground">
+            {expanded ? 'Hide' : 'Details'}
+          </span>
+          <motion.span
+            animate={{ rotate: expanded ? 90 : 0 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </motion.span>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            className="tool-group-content"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ type: 'spring', visualDuration: 0.35, bounce: 0 }}
+          >
+            <div className="tool-group-content-inner">
+              {toolCalls.map((tool) => (
+                <ToolItem key={tool.id} toolCall={tool} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 export function ToolCallGroup({
   groups,
   defaultExpanded = false,

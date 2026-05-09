@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiUrl } from '@/lib/api-base';
 
 export interface ModelInfo {
   id: string;
@@ -29,8 +30,6 @@ export interface ConfigState {
   updateConfig: (updates: Partial<ConfigState>) => Promise<void>;
 }
 
-const API_BASE = '';
-
 export const useConfigStore = create<ConfigState>((set, get) => ({
   models: {
     provider: 'minimax',
@@ -52,7 +51,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 
   fetchConfig: async () => {
-    const res = await fetch(`${API_BASE}/api/config`);
+    const res = await fetch(apiUrl('/api/config'));
     const config = await res.json();
     set({
       models: config.models || {
@@ -69,7 +68,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 
   updateConfig: async (updates) => {
-    await fetch(`${API_BASE}/api/config`, {
+    await fetch(apiUrl('/api/config'), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),

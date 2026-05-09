@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { apiUrl } from '@/lib/api-base';
 import {
   Select,
   SelectContent,
@@ -93,7 +94,7 @@ function LogsContent() {
 
   async function fetchFiles() {
     try {
-      const res = await fetch('/api/logs');
+      const res = await fetch(apiUrl('/api/logs'));
       const data = await res.json();
       setFiles(data);
       if (data.length > 0 && !selectedFile) {
@@ -107,7 +108,7 @@ function LogsContent() {
   async function fetchContent(filename: string) {
     setLoading(true);
     try {
-      const res = await fetch(`/api/logs/${filename}`);
+      const res = await fetch(apiUrl(`/api/logs/${filename}`));
       const text = await res.text();
       setContent(text);
     } catch (e) {

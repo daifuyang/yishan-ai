@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiUrl } from '@/lib/api-base';
 
 export interface Session {
   id: string;
@@ -22,20 +23,18 @@ interface SessionStore {
   setActiveId: (id: string | null) => void;
 }
 
-const API_BASE = '';
-
-export const useSessionStore = create<SessionStore>((set, get) => ({
+export const useSessionStore = create<SessionStore>((set) => ({
   sessions: [],
   activeId: null,
 
   fetchSessions: async () => {
-    const res = await fetch(`${API_BASE}/api/sessions`);
+    const res = await fetch(apiUrl('/api/sessions'));
     const sessions = await res.json();
     set({ sessions });
   },
 
   createSession: async (model: string) => {
-    const res = await fetch(`${API_BASE}/api/sessions`, {
+    const res = await fetch(apiUrl('/api/sessions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model }),
@@ -46,7 +45,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   deleteSession: async (id: string) => {
-    await fetch(`${API_BASE}/api/sessions/${id}`, { method: 'DELETE' });
+    await fetch(apiUrl(`/api/sessions/${id}`), { method: 'DELETE' });
     set((state) => ({
       sessions: state.sessions.filter((s) => s.id !== id),
       activeId: state.activeId === id ? null : state.activeId,
@@ -54,7 +53,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   updateSession: async (id: string, data: { title?: string; isPinned?: boolean }) => {
-    await fetch(`${API_BASE}/api/sessions/${id}`, {
+    await fetch(apiUrl(`/api/sessions/${id}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
