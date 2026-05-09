@@ -51,12 +51,22 @@ function LogoIcon() {
 
 export function AppSidebar() {
   const router = useRouter();
-  const { state, toggleSidebar, isMobile } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
 
   const handleNewChat = useCallback(() => {
-    router.push("/");
-  }, [router]);
+    const url = new URL(window.location.href);
+    const hasSessionId = url.searchParams.has("sessionId");
+
+    if (!hasSessionId && window.location.pathname === "/") {
+      toggleSidebar();
+    } else {
+      if (isMobile) {
+        setOpenMobile(false);
+      }
+      router.push("/");
+    }
+  }, [router, toggleSidebar, isMobile, setOpenMobile]);
 
   return (
     <div className="flex flex-col h-full">

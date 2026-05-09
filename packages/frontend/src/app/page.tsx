@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useCallback, useState } from "react";
+import React, { Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { ChatLayout } from "@/components/layout/ChatLayout";
@@ -13,33 +13,29 @@ import { ChatMain } from "@/components/chat/chat-main";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { useChatScroll } from "@/hooks/use-chat-scroll";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { toast } from "sonner";
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
-  const { sessions, activeId, createSession, fetchSessions, setActiveId } = useSessionStore();
+  const { sessions, activeId, createSession, deleteSession, fetchSessions, setActiveId } = useSessionStore();
   const {
     messages,
     isStreaming,
+    isFetchingMessages,
     streamingContent,
-    errorMessage,
     fetchMessages,
     sendMessage,
+    retryMessage,
     stopStream,
     clearMessages,
     rollbackMessage,
-    clearError,
   } = useChatStore();
-  const { fetchConfig } = useConfigStore();
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [rollbackContent, setRollbackContent] = useState<string | undefined>();
-  const initActiveIdRef = React.useRef<string | null>(null);
 
-  const hasMessages = messages.length > 0 || isStreaming;
-  const shouldShowLoading = isLoading || Boolean(activeId && !sessions.find((s) => s.id === activeId));
-  const isCreating = isCreatingSession;
+
+
+  const { fetchConfig } = useConfigStore();
+
   const session = sessions.find((s) => s.id === activeId);
+  const prevSessionIdRef = React.useRef<string | null>(null);
 
   const { containerRef, showScrollButton, scrollToBottom } = useChatScroll({
     messagesLength: messages.length,
@@ -48,69 +44,78 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     sessionId: activeId,
   });
 
-  // Error handling
   React.useEffect(() => {
-    if (errorMessage) {
-      toast.error(errorMessage);
-      clearError();
-    }
-  }, [errorMessage, clearError]);
-
-  // Initial data fetch
-  React.useEffect(() => {
-    fetchConfig();
-    fetchSessions();
-  }, [fetchConfig, fetchSessions]);
-
-  // Sync activeId from URL only on initial mount
-  React.useEffect(() => {
-    if (initActiveIdRef.current === null) {
-      if (sessionId) {
-        setActiveId(sessionId);
-      }
-      initActiveIdRef.current = sessionId;
-    }
-  }, [sessionId, setActiveId]);
-
-  // Load messages when activeId changes
-  React.useEffect(() => {
-    if (initActiveIdRef.current === null) {
+    if (!sessionId) {
+      setActiveId(null);
+      clearMessages();
+      prevSessionIdRef.current = null;
       return;
     }
-    if (activeId && activeId !== initActiveIdRef.current) {
-      initActiveIdRef.current = activeId;
-      console.log('[page] activeId changed:', activeId);
-      setIsLoading(true);
-      fetchMessages(activeId)
-        .then(() => {
-          console.log('[page] fetchMessages resolved, calling scrollToBottom');
-          scrollToBottom("instant");
-        })
-        .catch(() => {
-          setActiveId(null);
-          initActiveIdRef.current = null;
-          router.push("/");
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-  }, [activeId, fetchMessages, scrollToBottom, setActiveId, router]);
+
+    let cancelled = false;
+
+    setActiveId(sessionId);
+
+    const isNewSession = prevSessionIdRef.current !== sessionId;
+    prevSessionIdRef.current = sessionId;
+
+    fetchMessages(sessionId)
+      .then(() => {
+        if (cancelled) return;
+        scrollToBottom("instant");
+
+        if (isNewSession) {
+          const pendingKey = `pending_message_${sessionId}`;
+          const pendingData = sessionStorage.getItem(pendingKey);
+          if (pendingData) {
+            sessionStorage.removeItem(pendingKey);
+            const { content, model, mode } = JSON.parse(pendingData);
+            sendMessage(sessionId, content, model, mode);
+          }
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Failed to fetch messages:', error);
+        clearMessages();
+        setActiveId(null);
+        router.push("/");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, setActiveId, fetchMessages, scrollToBottom, clearMessages, router, sendMessage]);
 
   const handleSend = useCallback(
     async (content: string, model: string, mode: "plan" | "build") => {
-      setRollbackContent(undefined);
       if (!activeId) {
-        setIsCreatingSession(true);
-        const newSessionId = await createSession(model);
-        await sendMessage(newSessionId, content, model, mode);
-        setIsCreatingSession(false);
-        setActiveId(newSessionId);
+        const createResult = await createSession(model);
+
+        if (!createResult.success || !createResult.sessionId) {
+          return;
+        }
+
+        const newSessionId = createResult.sessionId;
+        sessionStorage.setItem(
+          `pending_message_${newSessionId}`,
+          JSON.stringify({ content, model, mode })
+        );
+
+        router.push(`/?sessionId=${newSessionId}`);
       } else {
         sendMessage(activeId, content, model, mode);
       }
     },
-    [activeId, createSession, sendMessage, setActiveId]
+    [activeId, createSession, sendMessage, router]
+  );
+
+  const handleRetry = useCallback(
+    async (messageId: string, model: string, mode: "plan" | "build") => {
+      if (!activeId) return;
+      retryMessage(activeId, messageId, model, mode);
+    },
+    [activeId, retryMessage]
   );
 
   const handleStop = useCallback(() => {
@@ -122,27 +127,30 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const handleRollback = useCallback(
     async (messageId: string, content: string) => {
       if (!activeId) return;
-      await rollbackMessage(activeId, messageId);
-      setRollbackContent(content);
+      rollbackMessage(activeId, messageId);
     },
     [activeId, rollbackMessage]
   );
 
-  const inputNode = (
-    <ChatInputWrapper
-      onSend={handleSend}
-      onStop={handleStop}
-      isStreaming={isStreaming}
-      disabled={isCreating}
-      defaultModel={session?.model}
-      initialContent={rollbackContent}
-      showPadding={false}
-    />
+  const handleDeleteSession = useCallback(
+    async (id: string) => {
+      await deleteSession(id);
+      clearMessages();
+      router.push("/");
+    },
+    [deleteSession, clearMessages, router]
   );
 
+  const hasMessages = messages.length > 0 || isStreaming;
+  const shouldShowLoading = isFetchingMessages && !messages.length;
+
   return (
-    <div className="flex flex-col h-dvh">
-      <ChatHeader title={session?.title || "新对话"} />
+    <div className="flex flex-col" style={{ height: '100vh' }}>
+      <ChatHeader
+        title={session?.title || "新对话"}
+        onDelete={activeId ? () => handleDeleteSession(activeId) : undefined}
+        onTitleClick={() => router.push("/")}
+      />
 
       <ChatMain
         hasMessages={hasMessages}
@@ -153,12 +161,20 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
         messages={
           <MessageList
             messages={messages}
-            isStreaming={isStreaming}
-            streamingContent={streamingContent}
             onRollback={handleRollback}
+            onRetry={handleRetry}
           />
         }
-        input={inputNode}
+        input={
+          <ChatInputWrapper
+            onSend={handleSend}
+            onStop={handleStop}
+            isStreaming={isStreaming}
+            disabled={isStreaming}
+            defaultModel={session?.model}
+            showPadding={false}
+          />
+        }
       />
     </div>
   );
@@ -167,7 +183,6 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
 function ChatContentWithParams() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
-
   return <ChatContent sessionId={sessionId} />;
 }
 

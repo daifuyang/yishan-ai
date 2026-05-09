@@ -74,8 +74,6 @@ function ChatContent({ sessionId }: ChatContentProps) {
         <div className="flex flex-col flex-1 border rounded-xl m-4 overflow-hidden">
           <MessageList
             messages={messages}
-            isStreaming={isStreaming}
-            streamingContent={streamingContent}
           />
           <div className="shrink-0 px-4 pb-4">
             <ChatInput
