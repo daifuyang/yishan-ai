@@ -19,7 +19,7 @@ export const SSE_EVENTS = {
   ERROR: 'error',
 } as const;
 
-export type SSEEventType = typeof SSE_EVENTS[keyof typeof SSE_EVENTS];
+export type SSEEventType = (typeof SSE_EVENTS)[keyof typeof SSE_EVENTS];
 
 export interface StreamStartedEvent {
   type: 'stream_started';
@@ -132,9 +132,7 @@ export class SSEManager {
   private createEventSource(): void {
     if (!this.sessionId || !this.handlers) return;
 
-    this.eventSource = new EventSource(
-      `/api/sessions/${this.sessionId}/chat/subscribe`
-    );
+    this.eventSource = new EventSource(`/api/sessions/${this.sessionId}/chat/subscribe`);
 
     this.setupHandlers();
   }
@@ -182,7 +180,7 @@ export class SSEManager {
 
       if (this.reconnectAttempts < this.maxRetries) {
         this.reconnectAttempts++;
-        const delay = this.retryDelay * Math.pow(2, this.reconnectAttempts - 1);
+        const delay = this.retryDelay * 2 ** (this.reconnectAttempts - 1);
         this.reconnectTimeout = setTimeout(() => {
           if (this.sessionId && this.handlers) {
             this.createEventSource();

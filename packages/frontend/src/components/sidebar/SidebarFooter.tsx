@@ -1,19 +1,10 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import { Settings, Bot } from "lucide-react";
-
-import {
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-} from "@/components/ui/sidebar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { MCPDialog } from "@/components/mcp/mcp-dialog";
+import { Bot, Settings } from 'lucide-react';
+import { useState } from 'react';
+import { MCPDialog } from '@/components/mcp/mcp-dialog';
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function SidebarFooter() {
   const [mcpOpen, setMcpOpen] = useState(false);

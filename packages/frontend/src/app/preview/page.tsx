@@ -1,37 +1,33 @@
 'use client';
 
-import { useCallback, useEffect, useState, useRef, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
-import type { PanelImperativeHandle } from "react-resizable-panels";
-import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Code,
+  File,
+  FileCode,
+  FileJson,
   FileText,
   Folder,
   FolderOpen,
-  ChevronRight,
-  File,
-  Image,
-  Video,
-  Music,
-  Archive,
-  Code,
-  FileJson,
-  FileCode,
   Globe,
+  Image,
+  Music,
   Palette,
-  Terminal,
-  Settings,
-  PanelLeftClose,
   PanelLeft,
-  ChevronUp,
-  ChevronDown,
+  PanelLeftClose,
+  Settings,
+  Terminal,
+  Video,
 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import type { PanelImperativeHandle } from 'react-resizable-panels';
 import remarkGfm from 'remark-gfm';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 
 interface FileItem {
   name: string;
@@ -126,7 +122,8 @@ function TreeItem({
 
   return (
     <div className="mb-0.5">
-      <div
+      <button
+        type="button"
         onClick={() => {
           if (node.type === 'directory') {
             onToggle(node.path);
@@ -135,10 +132,11 @@ function TreeItem({
           }
         }}
         className={`
-          group flex items-center gap-2 py-1.5 px-2 cursor-pointer transition-all duration-150 ease-out rounded-md mx-1
-          ${isSelected 
-            ? 'bg-primary/10 text-primary font-medium shadow-sm' 
-            : 'hover:bg-accent/60 text-muted-foreground hover:text-foreground'
+          group flex items-center gap-2 py-1.5 px-2 cursor-pointer transition-all duration-150 ease-out rounded-md mx-1 w-full text-left
+          ${
+            isSelected
+              ? 'bg-primary/10 text-primary font-medium shadow-sm'
+              : 'hover:bg-accent/60 text-muted-foreground hover:text-foreground'
           }
         `}
         style={{ paddingLeft }}
@@ -158,12 +156,12 @@ function TreeItem({
         <span className={`text-sm truncate ${isSelected ? '' : 'group-hover:font-medium'}`}>
           {node.name}
         </span>
-      </div>
+      </button>
       {node.type === 'directory' && node.expanded && node.children && (
         <div className="animate-fade-in-down">
-          {node.children.map((child, idx) => (
+          {node.children.map((child) => (
             <TreeItem
-              key={idx}
+              key={child.path}
               node={child}
               level={level + 1}
               selectedPath={selectedPath}
@@ -191,9 +189,9 @@ function FileExplorer({
   return (
     <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40">
       <div className="py-2 px-2">
-        {treeData.map((node, idx) => (
+        {treeData.map((node) => (
           <TreeItem
-            key={idx}
+            key={node.path}
             node={node}
             level={0}
             selectedPath={selectedPath}
@@ -208,11 +206,9 @@ function FileExplorer({
 
 function PreviewView({
   content,
-  filename,
   scrollRef,
 }: {
   content: string;
-  filename: string;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [scrollState, setScrollState] = useState({
@@ -248,18 +244,18 @@ function PreviewView({
     const container = scrollRef.current;
     if (!container) return;
 
-    setScrollState(prev => ({
+    setScrollState((prev) => ({
       ...prev,
       canScroll: container.scrollHeight > container.clientHeight,
     }));
-  }, [content, scrollRef]);
+  }, [scrollRef]);
 
   useEffect(() => {
     const shouldShowTop = !scrollState.isNearTop && !scrollState.isNearBottom;
     if (shouldShowTop !== showTopButton) {
       setShowTopButton(shouldShowTop);
     }
-  }, [scrollState.isNearTop, scrollState.isNearBottom, scrollState.canScroll]);
+  }, [scrollState.isNearTop, scrollState.isNearBottom, showTopButton]);
 
   const scrollToTop = () => {
     const container = scrollRef.current;
@@ -286,6 +282,7 @@ function PreviewView({
         <div className="fixed bottom-8 right-8 flex flex-col gap-2">
           {showTopButton && (
             <button
+              type="button"
               onClick={scrollToTop}
               className="p-3 bg-background border border-border rounded-full shadow-lg hover:bg-accent transition-all duration-200"
               title="滚动到顶部"
@@ -294,9 +291,10 @@ function PreviewView({
             </button>
           )}
           <button
+            type="button"
             onClick={scrollState.isNearBottom ? scrollToTop : scrollToBottom}
             className="p-3 bg-background border border-border rounded-full shadow-lg hover:bg-accent transition-all duration-200"
-            title={scrollState.isNearBottom ? "滚动到顶部" : "滚动到底部"}
+            title={scrollState.isNearBottom ? '滚动到顶部' : '滚动到底部'}
           >
             {scrollState.isNearBottom ? (
               <ChevronUp className="w-5 h-5 text-foreground" />
@@ -351,7 +349,7 @@ function EmptyPreview({ sidebarOpen }: { sidebarOpen: boolean }) {
 }
 
 function PreviewPageContent() {
-  const router = useRouter();
+  const _router = useRouter();
   const searchParams = useSearchParams();
   const [initialData, setInitialData] = useState<ListResponse | null>(null);
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -368,86 +366,90 @@ function PreviewPageContent() {
 
   const isDirectFilePreview = type === 'md' && pathParam;
 
-  const getParentPath = (filePath: string): string => {
+  const getParentPath = useCallback((filePath: string): string => {
     const segments = filePath.split('/').filter(Boolean);
     segments.pop();
     return segments.join('/');
-  };
+  }, []);
 
   const currentPath = isDirectFilePreview ? getParentPath(pathParam) : pathParam;
 
-  const buildTree = (items: FileItem[], basePath: string): TreeNode[] => {
-    return items.map(item => ({
-      name: item.name,
-      type: item.type,
-      path: basePath ? `${basePath}/${item.name}` : item.name,
-      children: item.type === 'directory' ? [] : undefined,
-      expanded: false,
-    })).sort((a, b) => {
-      if (a.type === 'directory' && b.type === 'file') return -1;
-      if (a.type === 'file' && b.type === 'directory') return 1;
-      return a.name.localeCompare(b.name);
-    });
-  };
-
-  const fetchDirectory = useCallback(async (path: string) => {
-    try {
-      const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to load');
-      }
-      const data: ListResponse = await res.json();
-      return data;
-    } catch (e) {
-      throw e;
-    }
+  const buildTree = useCallback((items: FileItem[], basePath: string): TreeNode[] => {
+    return items
+      .map((item) => ({
+        name: item.name,
+        type: item.type,
+        path: basePath ? `${basePath}/${item.name}` : item.name,
+        children: item.type === 'directory' ? [] : undefined,
+        expanded: false,
+      }))
+      .sort((a, b) => {
+        if (a.type === 'directory' && b.type === 'file') return -1;
+        if (a.type === 'file' && b.type === 'directory') return 1;
+        return a.name.localeCompare(b.name);
+      });
   }, []);
 
-  const loadChildren = useCallback(async (nodePath: string) => {
-    try {
-      const data = await fetchDirectory(nodePath);
-      return buildTree(data.items, nodePath);
-    } catch (e) {
-      console.error('Failed to load children:', e);
-      return [];
+  const fetchDirectory = useCallback(async (path: string) => {
+    const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to load');
     }
-  }, [fetchDirectory]);
+    const data: ListResponse = await res.json();
+    return data;
+  }, []);
 
-  const handleToggle = useCallback(async (path: string) => {
-    const updateTree = (nodes: TreeNode[]): TreeNode[] => {
-      return nodes.map(node => {
-        if (node.path === path) {
-          if (!node.expanded && node.children?.length === 0) {
-            return { ...node, expanded: true, loading: true };
-          }
-          return { ...node, expanded: !node.expanded };
-        }
-        if (node.children) {
-          return { ...node, children: updateTree(node.children) };
-        }
-        return node;
-      });
-    };
+  const loadChildren = useCallback(
+    async (nodePath: string) => {
+      try {
+        const data = await fetchDirectory(nodePath);
+        return buildTree(data.items, nodePath);
+      } catch (e) {
+        console.error('Failed to load children:', e);
+        return [];
+      }
+    },
+    [fetchDirectory, buildTree]
+  );
 
-    setTreeData(prev => updateTree(prev));
-
-    if (!treeData.find(n => n.path === path)?.expanded) {
-      const children = await loadChildren(path);
-      const updateTreeWithChildren = (nodes: TreeNode[]): TreeNode[] => {
-        return nodes.map(node => {
+  const handleToggle = useCallback(
+    async (path: string) => {
+      const updateTree = (nodes: TreeNode[]): TreeNode[] => {
+        return nodes.map((node) => {
           if (node.path === path) {
-            return { ...node, children, loading: false };
+            if (!node.expanded && node.children?.length === 0) {
+              return { ...node, expanded: true, loading: true };
+            }
+            return { ...node, expanded: !node.expanded };
           }
           if (node.children) {
-            return { ...node, children: updateTreeWithChildren(node.children) };
+            return { ...node, children: updateTree(node.children) };
           }
           return node;
         });
       };
-      setTreeData(prev => updateTreeWithChildren(prev));
-    }
-  }, [loadChildren, treeData]);
+
+      setTreeData((prev) => updateTree(prev));
+
+      if (!treeData.find((n) => n.path === path)?.expanded) {
+        const children = await loadChildren(path);
+        const updateTreeWithChildren = (nodes: TreeNode[]): TreeNode[] => {
+          return nodes.map((node) => {
+            if (node.path === path) {
+              return { ...node, children, loading: false };
+            }
+            if (node.children) {
+              return { ...node, children: updateTreeWithChildren(node.children) };
+            }
+            return node;
+          });
+        };
+        setTreeData((prev) => updateTreeWithChildren(prev));
+      }
+    },
+    [loadChildren, treeData]
+  );
 
   const handleSelect = useCallback(async (path: string) => {
     setSelectedPath(path);
@@ -497,7 +499,7 @@ function PreviewPageContent() {
     };
 
     init();
-  }, [pathParam, isDirectFilePreview, fetchDirectory]);
+  }, [pathParam, isDirectFilePreview, fetchDirectory, buildTree, getParentPath]);
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -543,10 +545,11 @@ function PreviewPageContent() {
           <ResizableHandle withHandle />
 
           {/* 右侧主区域 */}
-          <ResizablePanel className='flex flex-col' defaultSize="80%" minSize="60%">
+          <ResizablePanel className="flex flex-col" defaultSize="80%" minSize="60%">
             {/* 导航头：折叠按钮 + 路径 */}
             <div className="h-12 border-b bg-background px-6 flex items-center gap-4 sticky top-0 z-10">
               <button
+                type="button"
                 onClick={() => {
                   if (sidebarPanelRef.current) {
                     if (sidebarOpen) {
@@ -558,7 +561,7 @@ function PreviewPageContent() {
                   }
                 }}
                 className="p-2 hover:bg-accent rounded-lg transition-all duration-200 active:scale-95"
-                title={sidebarOpen ? "收起文件资源管理器" : "展开文件资源管理器"}
+                title={sidebarOpen ? '收起文件资源管理器' : '展开文件资源管理器'}
               >
                 {sidebarOpen ? (
                   <PanelLeftClose className="w-4 h-4 text-muted-foreground/60" />
@@ -589,6 +592,7 @@ function PreviewPageContent() {
                     <p className="text-destructive font-medium mb-2">加载失败</p>
                     <p className="text-sm text-muted-foreground mb-4">{error}</p>
                     <button
+                      type="button"
                       onClick={() => selectedPath && handleSelect(selectedPath)}
                       className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
                     >
@@ -597,11 +601,7 @@ function PreviewPageContent() {
                   </div>
                 </div>
               ) : fileContent ? (
-                <PreviewView
-                  content={fileContent.content}
-                  filename={selectedPath.split('/').pop() || ''}
-                  scrollRef={contentScrollRef}
-                />
+                <PreviewView content={fileContent.content} scrollRef={contentScrollRef} />
               ) : (
                 <EmptyPreview sidebarOpen={sidebarOpen} />
               )}

@@ -8,10 +8,16 @@
     "dev:backend": "pnpm --filter @yishan-ai/backend dev",
     "build": "pnpm --filter @yishan-ai/shared build && pnpm --filter @yishan-ai/frontend build && pnpm --filter @yishan-ai/backend build",
     "start": "pm2 start packages/backend/ecosystem.config.cjs",
-    "dev": "pnpm dev:frontend & pnpm dev:backend"
+    "dev": "pnpm dev:frontend & pnpm dev:backend",
+    "lint": "biome lint .",
+    "lint:fix": "biome check --write .",
+    "prepare": "husky"
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
     "pm2": "^5.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

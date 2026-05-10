@@ -1,9 +1,9 @@
-import type { Tool, ToolContext, ExecuteResult } from './types.js'
-import { logPermission } from './permission-log.js'
+import { logPermission } from './permission-log.js';
+import type { ExecuteResult, Tool, ToolContext } from './types.js';
 
 interface WebSearchArgs {
-  query: string
-  limit?: number
+  query: string;
+  limit?: number;
 }
 
 export function createWebSearchTool(): Tool {
@@ -25,60 +25,62 @@ export function createWebSearchTool(): Tool {
       required: ['query'],
     },
     async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
-      const { query, limit = 10 } = args as WebSearchArgs
+      const { query, limit = 10 } = args as WebSearchArgs;
 
       if (!query) {
-        throw new Error('query is required')
+        throw new Error('query is required');
       }
 
-      logPermission(ctx.sessionId, 'network', { path: `search:${query}` })
+      logPermission(ctx.sessionId, 'network', { path: `search:${query}` });
 
       try {
-        const encodedQuery = encodeURIComponent(query)
+        const encodedQuery = encodeURIComponent(query);
         const response = await fetch(
           `https://lite.duckduckgo.com/lite/?q=${encodedQuery}&kl=wt-wt`,
           {
             headers: {
               'User-Agent': 'Mozilla/5.0 (compatible; Yishan-AI/1.0)',
-              'Accept': 'text/html',
+              Accept: 'text/html',
             },
           }
-        )
+        );
 
         if (!response.ok) {
-          throw new Error(`Search failed: HTTP ${response.status}`)
+          throw new Error(`Search failed: HTTP ${response.status}`);
         }
 
-        const html = await response.text()
+        const html = await response.text();
 
-        const results: string[] = []
-        const linkRegex = /<a\s+href="([^"]+)"[^>]*>\s*([^<]+)\s*<\/a>/gi
-        const snippetRegex = /<p class="result__snippet"[^>]*>([^<]+)<\/p>/gi
+        const results: string[] = [];
+        const linkRegex = /<a\s+href="([^"]+)"[^>]*>\s*([^<]+)\s*<\/a>/gi;
+        const snippetRegex = /<p class="result__snippet"[^>]*>([^<]+)<\/p>/gi;
 
-        const links: { href: string; title: string }[] = []
-        let match
-        while ((match = linkRegex.exec(html)) !== null && links.length < limit * 2) {
-          const href = match[1]
-          const title = match[2].trim()
+        const links: { href: string; title: string }[] = [];
+        let match: RegExpExecArray | null = linkRegex.exec(html);
+        while (match !== null && links.length < limit * 2) {
+          const href = match[1];
+          const title = match[2].trim();
           if (href && title && !href.includes('duckduckgo') && title.length > 3) {
-            links.push({ href, title })
+            links.push({ href, title });
           }
+          match = linkRegex.exec(html);
         }
 
-        const snippets: string[] = []
-        while ((match = snippetRegex.exec(html)) !== null) {
-          snippets.push(match[1].replace(/<[^>]+>/g, ''))
+        const snippets: string[] = [];
+        match = snippetRegex.exec(html);
+        while (match !== null) {
+          snippets.push(match[1].replace(/<[^>]+>/g, ''));
+          match = snippetRegex.exec(html);
         }
 
         for (let i = 0; i < Math.min(limit, links.length); i++) {
-          const { href, title } = links[i]
-          const snippet = snippets[i] || ''
-          results.push(`${title}\n${href}${snippet ? `\n${snippet}` : ''}`)
+          const { href, title } = links[i];
+          const snippet = snippets[i] || '';
+          results.push(`${title}\n${href}${snippet ? `\n${snippet}` : ''}`);
         }
 
-        const output = results.length > 0
-          ? results.join('\n\n')
-          : `No results found for "${query}"`
+        const output =
+          results.length > 0 ? results.join('\n\n') : `No results found for "${query}"`;
 
         return {
           title: `Search: ${query}`,
@@ -87,10 +89,11 @@ export function createWebSearchTool(): Tool {
             query,
             resultCount: results.length,
           },
-        }
-      } catch (error: any) {
-        throw new Error(`Web search failed: ${error.message}`)
+        };
+      } catch (error: unknown) {
+        const err = error as Error;
+        throw new Error(`Web search failed: ${err.message}`);
       }
     },
-  }
+  };
 }

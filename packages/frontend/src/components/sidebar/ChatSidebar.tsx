@@ -1,32 +1,27 @@
-"use client";
+'use client';
 
-import React, { useCallback } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ChevronRight } from "lucide-react";
-
+import { ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import React, { Suspense, useCallback } from 'react';
+import { ChatInput } from '@/components/chat/chat-input';
+import { EmptyState } from '@/components/chat/empty-state';
+import { MessageList } from '@/components/chat/message-list';
+import { Separator } from '@/components/ui/separator';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarTrigger,
-  SidebarProvider,
   SidebarInset,
+  SidebarProvider,
   SidebarRail,
-} from "@/components/ui/sidebar";
-
-import { useSessionStore } from "@/stores/session-store";
-import { useChatStore } from "@/stores/chat-store";
-import { SidebarHeader as AppSidebarHeader } from "./SidebarHeader";
-import { SessionList } from "./SessionList";
-import { SidebarFooter as AppSidebarFooter } from "./SidebarFooter";
-import { MessageList } from "@/components/chat/message-list";
-import { ChatInput } from "@/components/chat/chat-input";
-import { EmptyState } from "@/components/chat/empty-state";
-import { Separator } from "@/components/ui/separator";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+} from '@/components/ui/sidebar';
+import { useChatStore } from '@/stores/chat-store';
+import { useSessionStore } from '@/stores/session-store';
+import { SessionList } from './SessionList';
+import { SidebarFooter as AppSidebarFooter } from './SidebarFooter';
+import { SidebarHeader as AppSidebarHeader } from './SidebarHeader';
 
 interface ChatContentProps {
   sessionId: string | null;
@@ -34,9 +29,9 @@ interface ChatContentProps {
 
 function ChatContent({ sessionId }: ChatContentProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const _searchParams = useSearchParams();
   const { sessions, fetchSessions, createSession } = useSessionStore();
-  const { messages, isStreaming, streamingContent, fetchMessages, sendMessage, stopStream } = useChatStore();
+  const { messages, isStreaming, fetchMessages, sendMessage, stopStream } = useChatStore();
 
   React.useEffect(() => {
     fetchSessions();
@@ -48,11 +43,14 @@ function ChatContent({ sessionId }: ChatContentProps) {
     }
   }, [sessionId, fetchMessages]);
 
-  const handleSend = useCallback((content: string, model: string, mode: "plan" | "build") => {
-    if (sessionId) {
-      sendMessage(sessionId, content, model, mode);
-    }
-  }, [sessionId, sendMessage]);
+  const handleSend = useCallback(
+    (content: string, model: string, mode: 'plan' | 'build') => {
+      if (sessionId) {
+        sendMessage(sessionId, content, model, mode);
+      }
+    },
+    [sessionId, sendMessage]
+  );
 
   const handleStop = useCallback(() => {
     if (sessionId) {
@@ -60,8 +58,8 @@ function ChatContent({ sessionId }: ChatContentProps) {
     }
   }, [sessionId, stopStream]);
 
-  const handleNewChat = useCallback(async () => {
-    const newSessionId = await createSession("MiniMax-M2.7");
+  const _handleNewChat = useCallback(async () => {
+    const newSessionId = await createSession('MiniMax-M2.7');
     router.push(`/?sessionId=${newSessionId}`);
   }, [createSession, router]);
 
@@ -72,9 +70,7 @@ function ChatContent({ sessionId }: ChatContentProps) {
     <div className="flex flex-col h-screen">
       {hasMessages ? (
         <div className="flex flex-col flex-1 border rounded-xl m-4 overflow-hidden">
-          <MessageList
-            messages={messages}
-          />
+          <MessageList messages={messages} />
           <div className="shrink-0 px-4 pb-4">
             <ChatInput
               onSend={handleSend}
@@ -95,12 +91,12 @@ function ChatContent({ sessionId }: ChatContentProps) {
 }
 
 interface AppSidebarProps {
-  sessionId: string | null;
+  sessionId?: string | null;
 }
 
 const DEFAULT_LIMIT = 10;
 
-function AppSidebar({ sessionId }: AppSidebarProps) {
+function AppSidebar(_props: AppSidebarProps) {
   const { sessions, fetchSessions } = useSessionStore();
   const totalCount = sessions.length;
   const hasMore = totalCount > DEFAULT_LIMIT;
@@ -144,9 +140,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   return (
     <SidebarProvider defaultOpen>
       <AppSidebar sessionId={null} />
-      <SidebarInset>
-        {children}
-      </SidebarInset>
+      <SidebarInset>{children}</SidebarInset>
       <SidebarRail />
     </SidebarProvider>
   );
@@ -158,7 +152,9 @@ interface ChatPageContentProps {
 
 export function ChatPageContent({ sessionId }: ChatPageContentProps) {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+    <Suspense
+      fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}
+    >
       <ChatContent sessionId={sessionId} />
     </Suspense>
   );

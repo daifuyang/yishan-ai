@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
 import { ArrowDown } from 'lucide-react';
-import { EmptyState } from './empty-state';
+import type React from 'react';
+import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { EmptyState } from './empty-state';
 
 interface ChatMainProps {
   hasMessages: boolean;
@@ -37,7 +37,9 @@ export function ChatMain({
         ref={containerRef}
         className="flex flex-1 overflow-y-auto scrollbar-thin scroll-smooth min-h-0"
       >
-        <div className={hasMessages ? 'flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-4' : 'hidden'}>
+        <div
+          className={hasMessages ? 'flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-4' : 'hidden'}
+        >
           {messages}
         </div>
         {!hasMessages && (
@@ -53,7 +55,10 @@ export function ChatMain({
       </div>
 
       {showScrollButton && (
-        <div className="fixed left-0 right-0 z-40 flex justify-center md:hidden" style={{ bottom: '160px' }}>
+        <div
+          className="fixed left-0 right-0 z-40 flex justify-center md:hidden"
+          style={{ bottom: '160px' }}
+        >
           <Button
             variant="outline"
             size="icon"

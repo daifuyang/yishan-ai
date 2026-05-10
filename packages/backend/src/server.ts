@@ -1,8 +1,8 @@
+import * as fs from 'node:fs';
 import Fastify from 'fastify';
 import app from './app.js';
 import { configManager } from './lib/config-manager.js';
 import { cleanupOldLogs, LOG_DIR, LOG_RETENTION_DAYS } from './lib/logger.js';
-import * as fs from 'fs';
 
 const PORT = configManager.get<number>('server.port') || 4800;
 

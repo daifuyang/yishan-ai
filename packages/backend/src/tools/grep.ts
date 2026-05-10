@@ -1,23 +1,23 @@
-import * as path from 'path'
-import type { Tool, ToolContext, ExecuteResult } from './types.js'
-import { logPermission } from './permission-log.js'
-import { grepInSandbox } from './docker-sandbox.js'
+import * as path from 'node:path';
+import { grepInSandbox } from './docker-sandbox.js';
+import { logPermission } from './permission-log.js';
+import type { ExecuteResult, Tool, ToolContext } from './types.js';
 
 interface GrepArgs {
-  pattern: string
-  path?: string
-  include?: string
-  exclude?: string
-  caseSensitive?: boolean
-  limit?: number
-  after?: number
-  before?: number
+  pattern: string;
+  path?: string;
+  include?: string;
+  exclude?: string;
+  caseSensitive?: boolean;
+  limit?: number;
+  after?: number;
+  before?: number;
 }
 
 function isWithinDirectory(targetPath: string, directory: string): boolean {
-  const resolved = path.resolve(targetPath)
-  const dirResolved = path.resolve(directory)
-  return resolved.startsWith(dirResolved + path.sep) || resolved === dirResolved
+  const resolved = path.resolve(targetPath);
+  const dirResolved = path.resolve(directory);
+  return resolved.startsWith(dirResolved + path.sep) || resolved === dirResolved;
 }
 
 export function createGrepTool(): Tool {
@@ -70,37 +70,38 @@ export function createGrepTool(): Tool {
         exclude,
         caseSensitive = false,
         limit = 50,
-      } = args as GrepArgs
+      } = args as GrepArgs;
 
       if (!pattern) {
-        throw new Error('pattern is required')
+        throw new Error('pattern is required');
       }
 
       const workDir = searchPath
         ? path.isAbsolute(searchPath)
           ? searchPath
           : path.resolve(ctx.directory, searchPath)
-        : ctx.directory
+        : ctx.directory;
 
       if (!isWithinDirectory(workDir, ctx.directory)) {
-        throw new Error(`Access denied: ${searchPath || '/'} is outside workspace`)
+        throw new Error(`Access denied: ${searchPath || '/'} is outside workspace`);
       }
 
-      logPermission(ctx.sessionId, 'read', { path: workDir })
+      logPermission(ctx.sessionId, 'read', { path: workDir });
 
       try {
         const output = await grepInSandbox(pattern, workDir, workDir, {
           include,
           caseSensitive,
-        })
+        });
 
-        const matches = output.split('\n').filter(line => line.trim()).slice(0, limit)
+        const matches = output
+          .split('\n')
+          .filter((line) => line.trim())
+          .slice(0, limit);
 
         return {
           title: `Grep: ${pattern}`,
-          output: matches.length > 0
-            ? matches.join('\n')
-            : `No matches found for "${pattern}"`,
+          output: matches.length > 0 ? matches.join('\n') : `No matches found for "${pattern}"`,
           metadata: {
             pattern,
             path: workDir,
@@ -109,13 +110,14 @@ export function createGrepTool(): Tool {
             matchCount: matches.length,
             truncated: matches.length >= limit,
           },
+        };
+      } catch (error: unknown) {
+        const err = error as { code?: string };
+        if (err.code === 'EACCES') {
+          throw new Error(`Permission denied: ${searchPath || '/'} `);
         }
-      } catch (error: any) {
-        if (error.code === 'EACCES') {
-          throw new Error(`Permission denied: ${searchPath || '/'} `)
-        }
-        throw error
+        throw error;
       }
     },
-  }
+  };
 }

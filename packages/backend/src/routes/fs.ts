@@ -1,9 +1,35 @@
-import { FastifyPluginAsync } from 'fastify';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as path from 'node:path';
+import type { FastifyPluginAsync } from 'fastify';
 
-const TEXT_EXTENSIONS = ['.md', '.txt', '.json', '.js', '.ts', '.tsx', '.jsx', '.css', '.html', '.xml', '.yaml', '.yml', '.toml', '.sh', '.bash', '.py', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp', '.sql', '.log'];
+const TEXT_EXTENSIONS = [
+  '.md',
+  '.txt',
+  '.json',
+  '.js',
+  '.ts',
+  '.tsx',
+  '.jsx',
+  '.css',
+  '.html',
+  '.xml',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.sh',
+  '.bash',
+  '.py',
+  '.go',
+  '.rs',
+  '.java',
+  '.c',
+  '.cpp',
+  '.h',
+  '.hpp',
+  '.sql',
+  '.log',
+];
 
 function getConfiguredDirs(): string[] {
   const configPath = path.join(os.homedir(), '.yishan-ai', 'config.json');
@@ -14,7 +40,7 @@ function getConfiguredDirs(): string[] {
         return config.workspace.directories;
       }
     }
-  } catch (e) {}
+  } catch (_e) {}
   return [];
 }
 
@@ -30,8 +56,10 @@ function resolveHostPath(requestedPath: string): string | null {
       return requestedResolved;
     }
 
-    if (requestedPath === path.basename(dir) ||
-        requestedPath.startsWith(path.basename(dir) + '/')) {
+    if (
+      requestedPath === path.basename(dir) ||
+      requestedPath.startsWith(`${path.basename(dir)}/`)
+    ) {
       const remainder = requestedPath.slice(path.basename(dir).length).replace(/^\//, '');
       const fullPath = remainder ? path.join(dir, remainder) : dir;
       if (fs.existsSync(fullPath)) {
@@ -70,7 +98,7 @@ const fsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const content = fs.readFileSync(targetPath, 'utf-8');
       return { content, ext };
-    } catch (error) {
+    } catch (_error) {
       return { error: 'Failed to read file' };
     }
   });
@@ -111,7 +139,7 @@ const fsRoutes: FastifyPluginAsync = async (fastify) => {
         items,
         parent: path.dirname(requestedPath).replace(/\\/g, '/'),
       };
-    } catch (error) {
+    } catch (_error) {
       return { error: 'Failed to read directory' };
     }
   });

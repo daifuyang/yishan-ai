@@ -1,42 +1,42 @@
 'use client';
 
-import React from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Bot, Settings, Sparkles, Shield, FileText, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { ChatLayout } from "@/components/layout/ChatLayout";
+import { Bot, ChevronRight, FileText, Settings, Shield, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import type React from 'react';
+import { ChatLayout } from '@/components/layout/ChatLayout';
+import { cn } from '@/lib/utils';
 
 const navItems = [
   {
-    id: "mcp",
-    label: "MCP 服务器",
+    id: 'mcp',
+    label: 'MCP 服务器',
     icon: Bot,
-    href: "/settings/mcp",
+    href: '/settings/mcp',
   },
   {
-    id: "skills",
-    label: "Skills",
+    id: 'skills',
+    label: 'Skills',
     icon: Sparkles,
-    href: "/settings/skills",
+    href: '/settings/skills',
   },
   {
-    id: "security",
-    label: "安全设置",
+    id: 'security',
+    label: '安全设置',
     icon: Shield,
-    href: "/settings/security",
+    href: '/settings/security',
   },
   {
-    id: "logs",
-    label: "日志",
+    id: 'logs',
+    label: '日志',
     icon: FileText,
-    href: "/settings/logs",
+    href: '/settings/logs',
   },
   {
-    id: "general",
-    label: "通用设置",
+    id: 'general',
+    label: '通用设置',
     icon: Settings,
-    href: "/settings/general",
+    href: '/settings/general',
   },
 ];
 
@@ -53,10 +53,10 @@ function SettingsNav() {
             key={item.id}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mb-1",
+              'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mb-1',
               isActive
-                ? "bg-primary text-primary-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                ? 'bg-primary text-primary-foreground font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
             )}
           >
             <Icon className="h-4 w-4" />
@@ -69,20 +69,14 @@ function SettingsNav() {
   );
 }
 
-export default function SettingsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
     <ChatLayout>
       <div className="flex flex-1 h-full">
         <aside className="w-[200px] border-r bg-muted/30 flex flex-col shrink-0">
           <SettingsNav />
         </aside>
-        <main className="flex-1 min-h-0 overflow-hidden">
-          {children}
-        </main>
+        <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
       </div>
     </ChatLayout>
   );

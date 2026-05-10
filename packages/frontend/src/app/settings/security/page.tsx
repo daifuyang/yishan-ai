@@ -1,11 +1,11 @@
 'use client';
 
+import { AlertTriangle, FolderOpen, Shield } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Shield, FolderOpen, AlertTriangle } from 'lucide-react';
 import { DirectoryPicker } from '@/components/settings/directory-picker';
 import { Switch } from '@/components/ui/switch';
-import { useConfigStore } from '@/stores/config-store';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useConfigStore } from '@/stores/config-store';
 
 export default function SecuritySettingsPage() {
   return (
@@ -52,9 +52,7 @@ function SecuritySettings() {
         <Shield className="h-6 w-6" />
         <div>
           <h3 className="font-medium text-lg">安全设置</h3>
-          <p className="text-sm text-muted-foreground">
-            配置工作目录和执行权限
-          </p>
+          <p className="text-sm text-muted-foreground">配置工作目录和执行权限</p>
         </div>
       </div>
 
@@ -66,10 +64,7 @@ function SecuritySettings() {
             <h4 className="font-medium">工作目录</h4>
           </div>
 
-          <DirectoryPicker
-            directories={workspace.directories}
-            onChange={handleDirectoriesChange}
-          />
+          <DirectoryPicker directories={workspace.directories} onChange={handleDirectoriesChange} />
 
           <div className="flex items-center gap-3 mt-4 pt-4 border-t">
             <Switch
@@ -95,7 +90,7 @@ function SecuritySettings() {
           </div>
 
           <div className="space-y-3">
-            <label className="text-sm font-medium">安全级别</label>
+            <span className="text-sm font-medium">安全级别</span>
             <div className="flex gap-4">
               {(['allow', 'ask', 'deny'] as const).map((level) => (
                 <label key={level} className="flex items-center gap-2 cursor-pointer">
@@ -115,9 +110,15 @@ function SecuritySettings() {
             </div>
 
             <div className="text-sm text-muted-foreground space-y-1 pl-6">
-              <p>• <strong>允许</strong>：AI 可以直接执行命令</p>
-              <p>• <strong>询问</strong>：AI 执行前需要用户确认</p>
-              <p>• <strong>拒绝</strong>：AI 无法执行命令</p>
+              <p>
+                • <strong>允许</strong>：AI 可以直接执行命令
+              </p>
+              <p>
+                • <strong>询问</strong>：AI 执行前需要用户确认
+              </p>
+              <p>
+                • <strong>拒绝</strong>：AI 无法执行命令
+              </p>
             </div>
           </div>
         </section>

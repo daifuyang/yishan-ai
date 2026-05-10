@@ -1,29 +1,28 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Bot, Plus, Trash2, AlertTriangle, Pencil, Settings } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMCPSStore, MCPServer } from "@/stores/mcp-store";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { AlertTriangle, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuItemIcon,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { TooltipProvider } from "@/components/ui/tooltip";
+} from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { type MCPServer, useMCPSStore } from '@/stores/mcp-store';
 
 export default function MCPSettingsPage() {
   return (
@@ -36,11 +35,12 @@ export default function MCPSettingsPage() {
 }
 
 function MCPServerList() {
-  const { servers, fetchServers, addServer, updateServer, removeServer, fetchTools } = useMCPSStore();
+  const { servers, fetchServers, addServer, updateServer, removeServer, fetchTools } =
+    useMCPSStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
-  const [jsonInput, setJsonInput] = useState("");
+  const [jsonInput, setJsonInput] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
@@ -51,7 +51,7 @@ function MCPServerList() {
 
   const openAddDialog = () => {
     setDialogMode('add');
-    setJsonInput("");
+    setJsonInput('');
     setJsonError(null);
     setEditingServer(null);
     setDialogOpen(true);
@@ -87,11 +87,11 @@ function MCPServerList() {
 
       setDialogOpen(false);
       fetchServers();
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof SyntaxError) {
-        setJsonError('JSON 解析错误：' + e.message);
+        setJsonError(`JSON 解析错误：${e.message}`);
       } else {
-        setJsonError(e.message);
+        setJsonError((e as Error).message);
       }
     }
   };
@@ -111,9 +111,7 @@ function MCPServerList() {
     <div className="flex flex-col h-full p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 shrink-0">
-        <h3 className="font-medium">
-          已配置的服务器 ({servers.length})
-        </h3>
+        <h3 className="font-medium">已配置的服务器 ({servers.length})</h3>
         <Button size="sm" onClick={openAddDialog}>
           <Plus className="h-4 w-4 mr-1" />
           添加服务器
@@ -143,7 +141,10 @@ function MCPServerList() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onSelect={(e) => { e.preventDefault(); openEditDialog(server); }}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        openEditDialog(server);
+                      }}
                     >
                       <DropdownMenuItemIcon>
                         <Pencil className="h-4 w-4 text-muted-foreground" />
@@ -151,7 +152,10 @@ function MCPServerList() {
                       编辑
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onSelect={(e) => { e.preventDefault(); setDeleteConfirm(server.name); }}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setDeleteConfirm(server.name);
+                      }}
                       className="text-red-600 focus:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                     >
                       <DropdownMenuItemIcon>
@@ -168,7 +172,7 @@ function MCPServerList() {
                     onCheckedChange={() => handleToggleEnabled(server)}
                   />
                   <span className="text-sm text-muted-foreground">
-                    {server.enabled ? "启用" : "停用"}
+                    {server.enabled ? '启用' : '停用'}
                   </span>
                 </div>
               </div>
@@ -196,16 +200,23 @@ function MCPServerList() {
             )}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">JSON 配置</label>
+                <label htmlFor="mcp-json-config" className="text-sm font-medium">
+                  JSON 配置
+                </label>
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setJsonInput('{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "@some/server"]\n    }\n  }\n}')}
+                  onClick={() =>
+                    setJsonInput(
+                      '{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "@some/server"]\n    }\n  }\n}'
+                    )
+                  }
                 >
                   填充模板
                 </Button>
               </div>
               <Textarea
+                id="mcp-json-config"
                 value={jsonInput}
                 onChange={(e) => {
                   setJsonInput(e.target.value);
@@ -246,7 +257,10 @@ function MCPServerList() {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               取消
             </Button>
-            <Button variant="destructive" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+            >
               删除
             </Button>
           </DialogFooter>

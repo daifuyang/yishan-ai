@@ -1,7 +1,7 @@
-import { existsSync, rmSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
+import { existsSync, rmSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const backendDir = resolve(__dirname, '..');
@@ -17,12 +17,22 @@ if (existsSync(publicDir)) {
 }
 
 execSync(`mkdir -p "${resolve(publicDir, '_next')}"`, { shell: '/bin/bash' });
-execSync(`cp -r "${resolve(frontendDir, '.next', 'static')}" "${publicDir}/_next/static"`, { shell: '/bin/bash' });
-execSync(`cp -f "${resolve(frontendDir, '.next', 'BUILD_ID')}" "${publicDir}/"`, { shell: '/bin/bash' });
+execSync(`cp -r "${resolve(frontendDir, '.next', 'static')}" "${publicDir}/_next/static"`, {
+  shell: '/bin/bash',
+});
+execSync(`cp -f "${resolve(frontendDir, '.next', 'BUILD_ID')}" "${publicDir}/"`, {
+  shell: '/bin/bash',
+});
 
 const serverAppDir = resolve(frontendDir, '.next', 'server', 'app');
 
-const rootHtmlFiles = ['index.html', 'history.html', 'preview.html', 'settings.html', '_not-found.html'];
+const rootHtmlFiles = [
+  'index.html',
+  'history.html',
+  'preview.html',
+  'settings.html',
+  '_not-found.html',
+];
 for (const file of rootHtmlFiles) {
   const srcPath = resolve(serverAppDir, file);
   if (existsSync(srcPath)) {
@@ -39,7 +49,9 @@ for (const subDir of subDirs) {
   const files = execSync(`ls "${srcSubDir}"`, { shell: '/bin/bash' }).toString().split('\n');
   for (const file of files) {
     if (!file.endsWith('.html')) continue;
-    execSync(`cp -f "${resolve(srcSubDir, file)}" "${resolve(publicDir, subDir, file)}"`, { shell: '/bin/bash' });
+    execSync(`cp -f "${resolve(srcSubDir, file)}" "${resolve(publicDir, subDir, file)}"`, {
+      shell: '/bin/bash',
+    });
   }
 }
 

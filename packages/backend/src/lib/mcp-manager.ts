@@ -1,10 +1,10 @@
+import { EventEmitter } from 'node:events';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { EventEmitter } from 'events';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -35,11 +35,21 @@ export interface MCPServer {
 export interface MCPTool {
   name: string;
   description: string;
-  inputSchema: any;
+  inputSchema: unknown;
+}
+
+interface RawMCPTool {
+  name: string;
+  description?: string;
+  input_schema?: unknown;
+  inputSchema?: unknown;
 }
 
 export class McpManager extends EventEmitter {
-  private connections = new Map<string, { client: Client; transport: any; tools: MCPTool[] }>();
+  private connections = new Map<
+    string,
+    { client: Client; transport: SSEClientTransport | StdioClientTransport; tools: MCPTool[] }
+  >();
   private configPath: string;
   private servers: Map<string, MCPServer> = new Map();
 
@@ -101,21 +111,26 @@ export class McpManager extends EventEmitter {
 
     if (this.connections.has(name)) {
       mcpLog('INFO', `Using existing connection for ${name}`);
-      const conn = this.connections.get(name)!;
-      server.tools = conn.tools;
-      return conn.tools;
+      const conn = this.connections.get(name);
+      if (conn) {
+        server.tools = conn.tools;
+        return conn.tools;
+      }
     }
 
     mcpLog('INFO', `Connecting to MCP server: ${name}`);
 
     try {
-      let transport: any;
+      let transport: SSEClientTransport | StdioClientTransport;
 
       if (server.config.url) {
         mcpLog('INFO', `Using SSE transport for ${name}`, { url: server.config.url });
         transport = new SSEClientTransport(new URL(server.config.url));
       } else if (server.config.command) {
-        mcpLog('INFO', `Using stdio transport for ${name}`, { command: server.config.command, args: server.config.args });
+        mcpLog('INFO', `Using stdio transport for ${name}`, {
+          command: server.config.command,
+          args: server.config.args,
+        });
         transport = new StdioClientTransport({
           command: server.config.command,
           args: server.config.args || [],
@@ -125,21 +140,22 @@ export class McpManager extends EventEmitter {
         throw new Error('Invalid MCP server config: must have url or command');
       }
 
-      const client = new Client(
-        {
-          name: 'yishan-mcp-client',
-          version: '1.0.0',
-        }
-      );
+      const client = new Client({
+        name: 'yishan-mcp-client',
+        version: '1.0.0',
+      });
 
       await client.connect(transport);
 
       const toolsResult = await client.listTools();
-      const tools = (toolsResult as any).tools || [];
+      const tools = (toolsResult as { tools?: RawMCPTool[] }).tools || [];
 
-      const mcpTools: MCPTool[] = tools.map((t: any) => {
+      const mcpTools: MCPTool[] = (tools as RawMCPTool[]).map((t) => {
         const inputSchema = t.input_schema || t.inputSchema || { type: 'object', properties: {} };
-        mcpLog('INFO', `Mapping tool ${t.name}`, { hasInputSchema: !!(t.input_schema || t.inputSchema), inputSchemaType: inputSchema.type });
+        mcpLog('INFO', `Mapping tool ${t.name}`, {
+          hasInputSchema: !!(t.input_schema || t.inputSchema),
+          inputSchemaType: (inputSchema as { type?: string }).type,
+        });
         return {
           name: t.name,
           description: t.description || '',
@@ -155,10 +171,11 @@ export class McpManager extends EventEmitter {
       this.emit('serverChanged', this.getServers());
 
       return mcpTools;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as Error;
       server.status = 'error';
-      server.error = err.message;
-      mcpLog('ERROR', `Failed to connect to ${name}`, { error: err.message });
+      server.error = error.message;
+      mcpLog('ERROR', `Failed to connect to ${name}`, { error: error.message });
       this.emit('serverChanged', this.getServers());
       throw err;
     }
@@ -200,31 +217,45 @@ export class McpManager extends EventEmitter {
         if (t.name && t.inputSchema) {
           allTools.push(t);
         } else {
-          mcpLog('WARN', `Skipping invalid tool`, { name: t.name, hasInputSchema: !!t.inputSchema });
+          mcpLog('WARN', `Skipping invalid tool`, {
+            name: t.name,
+            hasInputSchema: !!t.inputSchema,
+          });
         }
       }
     }
     return allTools;
   }
 
-  async callTool(toolName: string, args: Record<string, any>): Promise<any> {
+  async callTool(toolName: string, args: Record<string, unknown>): Promise<unknown> {
     const startTime = Date.now();
 
     for (const [serverName, conn] of this.connections) {
-      const tool = conn.tools.find(t => t.name === toolName);
+      const tool = conn.tools.find((t) => t.name === toolName);
       if (tool) {
-        mcpLog('INFO', `Calling tool ${toolName} on server ${serverName}`, { argsKeys: Object.keys(args) });
+        mcpLog('INFO', `Calling tool ${toolName} on server ${serverName}`, {
+          argsKeys: Object.keys(args),
+        });
         try {
           const result = await conn.client.callTool({
             name: toolName,
             arguments: args,
           });
           const duration = Date.now() - startTime;
-          mcpLog('INFO', `Tool ${toolName} completed`, { serverName, duration, resultLength: String(result).length });
+          mcpLog('INFO', `Tool ${toolName} completed`, {
+            serverName,
+            duration,
+            resultLength: String(result).length,
+          });
           return result;
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const error = err as Error;
           const duration = Date.now() - startTime;
-          mcpLog('ERROR', `Tool ${toolName} failed`, { serverName, duration, error: err.message });
+          mcpLog('ERROR', `Tool ${toolName} failed`, {
+            serverName,
+            duration,
+            error: error.message,
+          });
           throw err;
         }
       }
@@ -247,7 +278,10 @@ export class McpManager extends EventEmitter {
     this.emit('serverChanged', this.getServers());
   }
 
-  async updateServer(name: string, updates: { config?: MCPConfig; enabled?: boolean }): Promise<void> {
+  async updateServer(
+    name: string,
+    updates: { config?: MCPConfig; enabled?: boolean }
+  ): Promise<void> {
     const server = this.servers.get(name);
     if (!server) {
       throw new Error(`Server "${name}" not found`);

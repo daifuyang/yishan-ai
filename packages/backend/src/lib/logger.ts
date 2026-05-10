@@ -1,7 +1,7 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import pino from 'pino';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
 import pinoPretty from 'pino-pretty';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -84,42 +84,63 @@ class SessionLogger {
     };
 
     if (isDev) {
-      this.logger = pino({
-        level: 'debug',
-        base: {
-          pid: process.pid,
-          hostname: os.hostname(),
-          sessionId: this.sessionId,
-          correlationId: this.correlationId.slice(0, 8),
+      this.logger = pino(
+        {
+          level: 'debug',
+          base: {
+            pid: process.pid,
+            hostname: os.hostname(),
+            sessionId: this.sessionId,
+            correlationId: this.correlationId.slice(0, 8),
+          },
+          timestamp: () => `,"time":"${new Date().toISOString()}"`,
         },
-        timestamp: () => `,"time":"${new Date().toISOString()}"`,
-      }, pino.multistream([
-        { stream: pinoPretty({ colorize: true, translateTime: 'HH:MM:ss.l', ignore: 'pid,hostname', singleLine: false }), level: 'debug' },
-        { stream: fileDestination, level: 'debug' },
-      ]));
+        pino.multistream([
+          {
+            stream: pinoPretty({
+              colorize: true,
+              translateTime: 'HH:MM:ss.l',
+              ignore: 'pid,hostname',
+              singleLine: false,
+            }),
+            level: 'debug',
+          },
+          { stream: fileDestination, level: 'debug' },
+        ])
+      );
     } else {
-      this.logger = pino({
-        level: 'info',
-        base: {
-          pid: process.pid,
-          hostname: os.hostname(),
-          sessionId: this.sessionId,
-          correlationId: this.correlationId,
+      this.logger = pino(
+        {
+          level: 'info',
+          base: {
+            pid: process.pid,
+            hostname: os.hostname(),
+            sessionId: this.sessionId,
+            correlationId: this.correlationId,
+          },
+          timestamp: () => `,"time":"${new Date().toISOString()}"`,
         },
-        timestamp: () => `,"time":"${new Date().toISOString()}"`,
-      }, fileDestination);
+        fileDestination
+      );
     }
   }
 
   private sanitizeMeta(meta?: Record<string, unknown>): Record<string, unknown> {
     if (!meta) return {};
-    const sensitiveFields = ['apiKey', 'token', 'password', 'authorization', 'secret', 'MINIMAX_API_KEY'];
+    const sensitiveFields = [
+      'apiKey',
+      'token',
+      'password',
+      'authorization',
+      'secret',
+      'MINIMAX_API_KEY',
+    ];
     const sanitized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(meta)) {
-      if (sensitiveFields.some(f => key.toLowerCase().includes(f.toLowerCase()))) {
+      if (sensitiveFields.some((f) => key.toLowerCase().includes(f.toLowerCase()))) {
         sanitized[key] = '***';
       } else if (typeof value === 'string' && value.length > 500) {
-        sanitized[key] = value.slice(0, 500) + '...';
+        sanitized[key] = `${value.slice(0, 500)}...`;
       } else if (typeof value === 'object' && value !== null) {
         sanitized[key] = this.sanitizeMeta(value as Record<string, unknown>);
       } else {
@@ -221,4 +242,4 @@ export function cleanupOldLogs(): void {
 
 setInterval(cleanupOldLogs, 60 * 60 * 1000);
 
-export { LOG_DIR, LOG_RETENTION_DAYS, LOG_MAX_SIZE };
+export { LOG_DIR, LOG_MAX_SIZE, LOG_RETENTION_DAYS };

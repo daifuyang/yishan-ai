@@ -14,23 +14,23 @@ export interface ChatOptions {
   systemPrompt?: string;
 }
 
-export async function chat(messages: any[], options: ChatOptions) {
+export async function chat(messages: unknown[], options: ChatOptions) {
   return client.messages.create({
     model: options.model || defaultModel,
     max_tokens: options.maxTokens || 4096,
     temperature: options.temperature ?? 1,
     system: options.systemPrompt,
-    messages,
+    messages: messages as never,
   });
 }
 
-export async function* chatStream(messages: any[], options: ChatOptions) {
+export async function* chatStream(messages: unknown[], options: ChatOptions) {
   const stream = client.messages.stream({
     model: options.model || defaultModel,
     max_tokens: options.maxTokens || 4096,
     temperature: options.temperature ?? 1,
     system: options.systemPrompt,
-    messages,
+    messages: messages as never,
   });
 
   for await (const event of stream) {

@@ -1,11 +1,11 @@
-import type { Tool, ToolContext, ExecuteResult } from './types.js'
-import { logPermission } from './permission-log.js'
-import { globInSandbox } from './docker-sandbox.js'
+import { globInSandbox } from './docker-sandbox.js';
+import { logPermission } from './permission-log.js';
+import type { ExecuteResult, Tool, ToolContext } from './types.js';
 
 interface GlobArgs {
-  pattern: string
-  cwd?: string
-  limit?: number
+  pattern: string;
+  cwd?: string;
+  limit?: number;
 }
 
 export function createGlobTool(): Tool {
@@ -31,27 +31,29 @@ export function createGlobTool(): Tool {
       required: ['pattern'],
     },
     async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
-      const { pattern, cwd, limit = 100 } = args as GlobArgs
+      const { pattern, cwd, limit = 100 } = args as GlobArgs;
 
       if (!pattern) {
-        throw new Error('pattern is required')
+        throw new Error('pattern is required');
       }
 
-      const workDir = cwd ? ctx.directory + '/' + cwd : ctx.directory
+      const workDir = cwd ? `${ctx.directory}/${cwd}` : ctx.directory;
 
-      logPermission(ctx.sessionId, 'read', { path: workDir })
+      logPermission(ctx.sessionId, 'read', { path: workDir });
 
       try {
-        const output = await globInSandbox(pattern, workDir)
+        const output = await globInSandbox(pattern, workDir);
 
-        const lines = output.split('\n').filter(line => line.trim())
-        const limited = lines.slice(0, limit)
-        const resultOutput = limited.join('\n')
-        const truncated = lines.length > limit
+        const lines = output.split('\n').filter((line) => line.trim());
+        const limited = lines.slice(0, limit);
+        const resultOutput = limited.join('\n');
+        const truncated = lines.length > limit;
 
         return {
           title: `Glob: ${pattern}`,
-          output: truncated ? `${resultOutput}\n... (${lines.length - limit} more results)` : resultOutput || 'No matches found',
+          output: truncated
+            ? `${resultOutput}\n... (${lines.length - limit} more results)`
+            : resultOutput || 'No matches found',
           metadata: {
             pattern,
             cwd: workDir,
@@ -59,10 +61,11 @@ export function createGlobTool(): Tool {
             returned: limited.length,
             truncated,
           },
-        }
-      } catch (error: any) {
-        throw new Error(`Glob failed: ${error.message}`)
+        };
+      } catch (error: unknown) {
+        const err = error as Error;
+        throw new Error(`Glob failed: ${err.message}`);
       }
     },
-  }
+  };
 }

@@ -1,12 +1,19 @@
 'use client';
 
-import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { SendHorizonal, Square } from 'lucide-react';
-import { useConfigStore } from '@/stores/config-store';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import type { ChatMode } from '@/lib/constants';
+import { useConfigStore } from '@/stores/config-store';
 
 interface ChatInputProps {
   onSend: (content: string, model: string, mode: ChatMode) => void;
@@ -29,7 +36,9 @@ export function ChatInput({
 }: ChatInputProps) {
   const { models, fetchConfig } = useConfigStore();
   const [content, setContent] = useState(initialContent || '');
-  const [model, setModel] = useState(() => defaultModel || models.defaultModel || 'MiniMax-M2.7-highspeed');
+  const [model, setModel] = useState(
+    () => defaultModel || models.defaultModel || 'MiniMax-M2.7-highspeed'
+  );
   const [mode, setMode] = useState<ChatMode>('build');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -43,7 +52,7 @@ export function ChatInput({
     if (defaultModel && defaultModel !== model) {
       setModel(defaultModel);
     }
-  }, [defaultModel]);
+  }, [defaultModel, model]);
 
   useEffect(() => {
     if (initialContent !== undefined) {
@@ -64,26 +73,29 @@ export function ChatInput({
 
   useEffect(() => {
     adjustHeight();
-  }, [content, adjustHeight]);
+  }, [adjustHeight]);
 
   const handleSend = useCallback(async () => {
     if (!content.trim() || disabled || isStreaming || model === 'no-model') return;
     const currentContent = content;
     try {
       await onSend(currentContent, model, mode);
-    } catch (error) {
+    } catch (_error) {
       return;
     }
     setContent('');
     adjustHeight();
   }, [content, model, mode, disabled, isStreaming, onSend, adjustHeight]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }, [handleSend]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
 
   const isDisabled = disabled || isStreaming;
   const modelList = models.models.length > 0 ? models.models : [{ id: 'no-model', name: '暂无' }];
@@ -119,7 +131,9 @@ export function ChatInput({
           </SelectTrigger>
           <SelectContent>
             {modelList.map((m) => (
-              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+              <SelectItem key={m.id} value={m.id}>
+                {m.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -132,7 +146,11 @@ export function ChatInput({
             <span className="hidden sm:inline">停止</span>
           </Button>
         ) : (
-          <Button onClick={handleSend} disabled={!content.trim() || isDisabled || model === 'no-model'} className="h-8 px-2 sm:px-3 gap-1 shrink-0">
+          <Button
+            onClick={handleSend}
+            disabled={!content.trim() || isDisabled || model === 'no-model'}
+            className="h-8 px-2 sm:px-3 gap-1 shrink-0"
+          >
             <SendHorizonal className="w-4 h-4" />
           </Button>
         )}

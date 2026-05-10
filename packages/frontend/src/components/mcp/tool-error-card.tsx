@@ -1,9 +1,9 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ChevronRight, Copy, Check, Ban } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { AnimatePresence, motion } from 'framer-motion';
+import { Ban, Check, ChevronRight, Copy } from 'lucide-react';
+import { useState } from 'react';
+import { cn } from '@/lib/utils';
 
 const TOOL_NAMES: Record<string, string> = {
   read: 'Read',
@@ -16,38 +16,38 @@ const TOOL_NAMES: Record<string, string> = {
   bash: 'Shell',
   apply_patch: 'Patch',
   question: 'Question',
-}
+};
 
 export interface ToolErrorCardProps {
-  tool: string
-  error: string
-  defaultOpen?: boolean
-  subtitle?: string
-  className?: string
+  tool: string;
+  error: string;
+  defaultOpen?: boolean;
+  subtitle?: string;
+  className?: string;
 }
 
 function getToolLabel(tool: string): string {
-  return TOOL_NAMES[tool] ?? tool
+  return TOOL_NAMES[tool] ?? tool;
 }
 
 function cleanError(error: string): string {
-  return error.replace(/^Error:\s*/, '').trim()
+  return error.replace(/^Error:\s*/, '').trim();
 }
 
 function getErrorBody(error: string): string {
-  const cleaned = cleanError(error)
-  const parts = cleaned.split(': ')
-  if (parts.length <= 1) return cleaned
-  return parts.slice(1).join(': ').trim() || cleaned
+  const cleaned = cleanError(error);
+  const parts = cleaned.split(': ');
+  if (parts.length <= 1) return cleaned;
+  return parts.slice(1).join(': ').trim() || cleaned;
 }
 
 function getErrorSubtitle(error: string): string {
-  const cleaned = cleanError(error)
-  const parts = cleaned.split(': ')
-  if (parts.length <= 1) return 'Failed'
-  const head = (parts[0] ?? '').trim()
-  if (!head) return 'Failed'
-  return head[0] ? head[0].toUpperCase() + head.slice(1) : 'Failed'
+  const cleaned = cleanError(error);
+  const parts = cleaned.split(': ');
+  if (parts.length <= 1) return 'Failed';
+  const head = (parts[0] ?? '').trim();
+  if (!head) return 'Failed';
+  return head[0] ? head[0].toUpperCase() + head.slice(1) : 'Failed';
 }
 
 export function ToolErrorCard({
@@ -57,24 +57,25 @@ export function ToolErrorCard({
   subtitle,
   className,
 }: ToolErrorCardProps) {
-  const [open, setOpen] = useState(defaultOpen)
-  const [copied, setCopied] = useState(false)
+  const [open, setOpen] = useState(defaultOpen);
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    const text = cleanError(error)
-    if (!text) return
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    const text = cleanError(error);
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-  const body = getErrorBody(error)
-  const autoSubtitle = subtitle ?? getErrorSubtitle(error)
+  const body = getErrorBody(error);
+  const autoSubtitle = subtitle ?? getErrorSubtitle(error);
 
   return (
     <div className={cn('tool-error-card', className)}>
-      <div
-        className="tool-error-card-trigger"
+      <button
+        type="button"
+        className="tool-error-card-trigger w-full text-left"
         onClick={() => setOpen(!open)}
       >
         <div className="tool-error-card-trigger-content">
@@ -97,7 +98,7 @@ export function ToolErrorCard({
         >
           <ChevronRight className="h-4 w-4" />
         </motion.span>
-      </div>
+      </button>
 
       <AnimatePresence>
         {open && (
@@ -110,15 +111,12 @@ export function ToolErrorCard({
           >
             <div className="tool-error-card-copy">
               <button
+                type="button"
                 onClick={handleCopy}
                 className="tool-error-card-copy-btn"
                 aria-label={copied ? 'Copied' : 'Copy error'}
               >
-                {copied ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
             {body && <p className="tool-error-card-body">{body}</p>}
@@ -126,5 +124,5 @@ export function ToolErrorCard({
         )}
       </AnimatePresence>
     </div>
-  )
+  );
 }

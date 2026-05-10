@@ -1,16 +1,16 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
-import { Copy, Check, Bot, RotateCcw, RefreshCw } from 'lucide-react';
+import { Bot, Check, Copy, RefreshCw, RotateCcw } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { ToolItem, groupToolCalls, ContextToolGroup } from '@/components/mcp/tool-call-block';
-import type { Message, ContentBlock, ToolCall, ToolCallGroup } from '@/types';
+import remarkGfm from 'remark-gfm';
+import { ContextToolGroup, groupToolCalls, ToolItem } from '@/components/mcp/tool-call-block';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import type { ContentBlock, Message, ToolCall, ToolCallGroup } from '@/types';
 
 interface MessageListProps {
   messages: Message[];
@@ -28,7 +28,11 @@ function contentBlocksToToolCalls(blocks: ContentBlock[]): ToolCall[] {
       input: block.input || {},
       output: block.result,
       error: block.error,
-      status: block.error ? 'error' as const : block.result ? 'completed' as const : 'running' as const,
+      status: block.error
+        ? ('error' as const)
+        : block.result
+          ? ('completed' as const)
+          : ('running' as const),
     }));
 }
 
@@ -61,9 +65,12 @@ function extractTextFromReactNode(node: React.ReactNode): string {
   return '';
 }
 
-
-
-function CopyButton({ content, id, copiedId, onCopy }: {
+function CopyButton({
+  content,
+  id,
+  copiedId,
+  onCopy,
+}: {
   content: string;
   id: string;
   copiedId: string | null;
@@ -103,13 +110,16 @@ function AssistantBubble({
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const isPending = message.status === 'pending';
 
-  const textContent = typeof message.content === 'string'
-    ? message.content
-    : message.content.filter(c => c.type === 'text').map(c => c.text).join('');
+  const textContent =
+    typeof message.content === 'string'
+      ? message.content
+      : message.content
+          .filter((c) => c.type === 'text')
+          .map((c) => c.text)
+          .join('');
 
-  const toolUseBlocks = typeof message.content === 'string'
-    ? []
-    : message.content.filter(c => c.type === 'tool_use');
+  const toolUseBlocks =
+    typeof message.content === 'string' ? [] : message.content.filter((c) => c.type === 'tool_use');
 
   const toolCalls = contentBlocksToToolCalls(toolUseBlocks);
   const groups = groupToolCalls(toolCalls);
@@ -134,6 +144,7 @@ function AssistantBubble({
         <div className="relative group">
           <pre className="!my-0">{children}</pre>
           <button
+            type="button"
             onClick={() => handleCodeCopy(codeText)}
             className="absolute top-2 right-2 p-1.5 rounded bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
             title="复制代码"
@@ -153,9 +164,7 @@ function AssistantBubble({
     if (group.type === 'context') {
       return <ContextToolGroup key={`context-${group.tools[0]?.id}`} toolCalls={group.tools} />;
     }
-    return group.tools.map((tool) => (
-      <ToolItem key={tool.id} toolCall={tool} />
-    ));
+    return group.tools.map((tool) => <ToolItem key={tool.id} toolCall={tool} />);
   };
 
   if (isPending && !textContent) {
@@ -168,11 +177,7 @@ function AssistantBubble({
 
   return (
     <div className="flex flex-col gap-2 flex-1 min-w-0">
-      {groups.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {groups.map(renderGroup)}
-        </div>
-      )}
+      {groups.length > 0 && <div className="flex flex-col gap-2">{groups.map(renderGroup)}</div>}
 
       {textContent && (
         <div className="msg-actions-wrapper w-full max-w-full overflow-hidden">
@@ -188,7 +193,12 @@ function AssistantBubble({
           </div>
           {!isPending && (
             <div className="msg-action-btn">
-              <CopyButton content={textContent} id={message.id} copiedId={copiedId} onCopy={onCopy} />
+              <CopyButton
+                content={textContent}
+                id={message.id}
+                copiedId={copiedId}
+                onCopy={onCopy}
+              />
             </div>
           )}
         </div>
@@ -210,22 +220,25 @@ function UserBubble({
   onRollback?: (messageId: string, content: string) => void;
   onRetry?: (messageId: string, model: string, mode: 'plan' | 'build') => void;
 }) {
-  const textContent = typeof message.content === 'string'
-    ? message.content
-    : message.content
-        .filter((c) => c.type === 'text')
-        .map((c) => c.text)
-        .join('') || JSON.stringify(message.content);
+  const textContent =
+    typeof message.content === 'string'
+      ? message.content
+      : message.content
+          .filter((c) => c.type === 'text')
+          .map((c) => c.text)
+          .join('') || JSON.stringify(message.content);
 
   const isFailed = message.status === 'failed';
   const isPending = message.status === 'pending';
 
   return (
     <div className="msg-actions-wrapper align-end">
-      <div className={cn(
-        "px-3 py-2 rounded shadow-sm",
-        isFailed ? "bg-red-500/20 border border-red-500/50" : "bg-primary text-primary-foreground"
-      )}>
+      <div
+        className={cn(
+          'px-3 py-2 rounded shadow-sm',
+          isFailed ? 'bg-red-500/20 border border-red-500/50' : 'bg-primary text-primary-foreground'
+        )}
+      >
         <div className="prose prose-sm prose-invert max-w-none text-[15px] [&>p]:my-0 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">
           <ReactMarkdown>{textContent}</ReactMarkdown>
         </div>
@@ -276,9 +289,18 @@ function StreamingIndicator() {
   return (
     <div className="h-8 mt-0 flex items-center justify-start">
       <div className="flex gap-1.5">
-        <Skeleton className="h-2 w-2 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-        <Skeleton className="h-2 w-2 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-        <Skeleton className="h-2 w-2 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        <Skeleton
+          className="h-2 w-2 rounded-full animate-bounce"
+          style={{ animationDelay: '0ms' }}
+        />
+        <Skeleton
+          className="h-2 w-2 rounded-full animate-bounce"
+          style={{ animationDelay: '150ms' }}
+        />
+        <Skeleton
+          className="h-2 w-2 rounded-full animate-bounce"
+          style={{ animationDelay: '300ms' }}
+        />
       </div>
     </div>
   );
@@ -288,7 +310,7 @@ export function MessageList({ messages, onRollback, onRetry, className }: Messag
   const { copiedId, handleCopy } = useCopyToClipboard();
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn('flex flex-col', className)}>
       <div className="w-full space-y-5">
         {messages.map((msg) => (
           <div key={msg.id} className="flex w-full items-start gap-2 sm:gap-4 animate-fade-in-up">
@@ -302,7 +324,13 @@ export function MessageList({ messages, onRollback, onRetry, className }: Messag
             ) : (
               <>
                 <div className="w-full min-w-0 ml-auto sm:w-auto sm:max-w-[85%]">
-                  <UserBubble message={msg} copiedId={copiedId} onCopy={handleCopy} onRollback={onRollback} onRetry={onRetry} />
+                  <UserBubble
+                    message={msg}
+                    copiedId={copiedId}
+                    onCopy={handleCopy}
+                    onRollback={onRollback}
+                    onRetry={onRetry}
+                  />
                 </div>
                 <div className="w-10 shrink-0 hidden sm:block" aria-hidden />
               </>

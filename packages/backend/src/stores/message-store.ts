@@ -1,9 +1,14 @@
-import { prisma } from '../lib/stream-processor.js';
 import { getLogger } from '../lib/logger.js';
+import { prisma } from '../lib/stream-processor.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-function storeLog(sessionId: string | null, level: 'DEBUG' | 'INFO', message: string, meta?: Record<string, unknown>) {
+function storeLog(
+  sessionId: string | null,
+  level: 'DEBUG' | 'INFO',
+  message: string,
+  meta?: Record<string, unknown>
+) {
   if (!isDev) return;
   if (sessionId) {
     const log = getLogger(sessionId);
@@ -22,11 +27,23 @@ export interface StoredMessage {
   sessionId: string;
   role: 'user' | 'assistant';
   content: string | object[];
-  toolCalls?: any[];
+  toolCalls?: unknown[];
   createdAt: number;
   usageInput?: number;
   usageOutput?: number;
   deletedAt?: number;
+}
+
+interface PrismaMessageRow {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string | object[];
+  toolCalls?: string | null;
+  createdAt: Date;
+  usageInput?: number | null;
+  usageOutput?: number | null;
+  deletedAt?: Date | null;
 }
 
 function parseContent(content: string | object[]): string | object[] {
@@ -40,13 +57,13 @@ function parseContent(content: string | object[]): string | object[] {
   return content;
 }
 
-function toStoredMessage(m: any): StoredMessage {
+function toStoredMessage(m: PrismaMessageRow): StoredMessage {
   return {
     id: m.id,
     sessionId: m.sessionId,
     role: m.role as 'user' | 'assistant',
     content: parseContent(m.content),
-    toolCalls: m.toolCalls ? JSON.parse(m.toolCalls) : undefined,
+    toolCalls: m.toolCalls ? (JSON.parse(m.toolCalls) as unknown[]) : undefined,
     createdAt: m.createdAt.getTime(),
     usageInput: m.usageInput ?? undefined,
     usageOutput: m.usageOutput ?? undefined,
@@ -54,7 +71,11 @@ function toStoredMessage(m: any): StoredMessage {
   };
 }
 
-export async function getMessages(sessionId: string, limit = 100, offset = 0): Promise<StoredMessage[]> {
+export async function getMessages(
+  sessionId: string,
+  limit = 100,
+  offset = 0
+): Promise<StoredMessage[]> {
   const messages = await prisma.message.findMany({
     where: { sessionId, deletedAt: null },
     orderBy: { createdAt: 'asc' },
@@ -69,7 +90,7 @@ export async function appendMessage(
   role: 'user' | 'assistant',
   content: string | object[],
   usage?: { inputTokens: number; outputTokens: number },
-  toolCalls?: any[]
+  toolCalls?: unknown[]
 ): Promise<StoredMessage> {
   const contentJson = typeof content === 'string' ? content : JSON.stringify(content);
   const toolCallsJson = toolCalls ? JSON.stringify(toolCalls) : null;
@@ -102,11 +123,14 @@ export async function appendMessage(
   return toStoredMessage(message);
 }
 
-export async function rewriteMessages(sessionId: string, messages: { role: string; content: any }[]): Promise<void> {
+export async function rewriteMessages(
+  sessionId: string,
+  messages: { role: string; content: unknown }[]
+): Promise<void> {
   await prisma.message.deleteMany({ where: { sessionId } });
 
   await prisma.message.createMany({
-    data: messages.map(msg => ({
+    data: messages.map((msg) => ({
       id: crypto.randomUUID(),
       sessionId,
       role: msg.role,
@@ -123,13 +147,15 @@ export async function rewriteMessages(sessionId: string, messages: { role: strin
   storeLog(sessionId, 'DEBUG', 'Messages rewritten', { messageCount: messages.length });
 }
 
-export async function getAnthropicMessages(sessionId: string): Promise<{ role: string; content: any }[]> {
+export async function getAnthropicMessages(
+  sessionId: string
+): Promise<{ role: string; content: unknown }[]> {
   const messages = await prisma.message.findMany({
     where: { sessionId, deletedAt: null },
     orderBy: { createdAt: 'asc' },
     select: { role: true, content: true },
   });
-  return messages.map(m => ({ role: m.role, content: parseContent(m.content) }));
+  return messages.map((m) => ({ role: m.role, content: parseContent(m.content) }));
 }
 
 export async function softDeleteMessagesAfter(sessionId: string, messageId: string): Promise<void> {
@@ -164,6 +190,11 @@ export async function restoreMessages(sessionId: string, messageId: string): Pro
       deletedAt: { not: null },
     },
     data: { deletedAt: null },
+  });
+
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { updatedAt: new Date() },
   });
 
   storeLog(sessionId, 'DEBUG', 'Messages restored', { messageId: messageId.slice(0, 8) });

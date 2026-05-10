@@ -1,15 +1,13 @@
-"use client";
+'use client';
 
-import React, { useCallback } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { MessageCirclePlus, Settings, History } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { SessionList } from "@/components/sidebar/SessionList";
-import { Separator } from "@/components/ui/separator";
-import { useSidebar } from "@/components/ui/sidebar";
-import { PanelLeft } from "lucide-react";
+import { History, MessageCirclePlus, PanelLeft, Settings } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useCallback } from 'react';
+import { SessionList } from '@/components/sidebar/SessionList';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { useSidebar } from '@/components/ui/sidebar';
 
 function LogoIcon() {
   return (
@@ -21,6 +19,7 @@ function LogoIcon() {
       xmlns="http://www.w3.org/2000/svg"
       className="shrink-0"
     >
+      <title>App Logo</title>
       <path
         d="M12 2L2 9L12 16L22 9L12 2Z"
         stroke="#171717"
@@ -52,19 +51,19 @@ function LogoIcon() {
 export function AppSidebar() {
   const router = useRouter();
   const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
-  const isCollapsed = state === "collapsed";
+  const isCollapsed = state === 'collapsed';
 
   const handleNewChat = useCallback(() => {
     const url = new URL(window.location.href);
-    const hasSessionId = url.searchParams.has("sessionId");
+    const hasSessionId = url.searchParams.has('sessionId');
 
-    if (!hasSessionId && window.location.pathname === "/") {
+    if (!hasSessionId && window.location.pathname === '/') {
       toggleSidebar();
     } else {
       if (isMobile) {
         setOpenMobile(false);
       }
-      router.push("/");
+      router.push('/');
     }
   }, [router, toggleSidebar, isMobile, setOpenMobile]);
 
@@ -73,14 +72,15 @@ export function AppSidebar() {
       <div className="flex flex-col gap-3 px-3 py-3">
         <div className="flex items-center gap-2 py-1.5 px-2">
           <LogoIcon />
-          <span className={isCollapsed ? "" : "text-sm font-semibold"}>Yishan AI</span>
+          <span className={isCollapsed ? '' : 'text-sm font-semibold'}>Yishan AI</span>
           {isMobile && (
-            <div
+            <button
+              type="button"
               onClick={toggleSidebar}
               className="ml-auto p-2 hover:bg-black/10 rounded-md cursor-pointer transition-colors"
             >
               <PanelLeft className="h-4 w-4 text-foreground" />
-            </div>
+            </button>
           )}
         </div>
 

@@ -1,8 +1,27 @@
 import { z } from 'zod';
 
+export const TextContentBlockSchema = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+});
+
+export const ImageContentBlockSchema = z.object({
+  type: z.literal('image'),
+  source: z.string(),
+});
+
+export const ContentBlockSchema = z.discriminatedUnion('type', [
+  TextContentBlockSchema,
+  ImageContentBlockSchema,
+]);
+
+export type TextContentBlock = z.infer<typeof TextContentBlockSchema>;
+export type ImageContentBlock = z.infer<typeof ImageContentBlockSchema>;
+export type ContentBlock = z.infer<typeof ContentBlockSchema>;
+
 export const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
-  content: z.union([z.string(), z.array(z.any())]),
+  content: z.union([z.string(), z.array(ContentBlockSchema)]),
 });
 
 export const ChatRequestSchema = z.object({
@@ -14,7 +33,7 @@ export const ChatRequestSchema = z.object({
 });
 
 export const ChatResponseSchema = z.object({
-  content: z.union([z.string(), z.array(z.any())]),
+  content: z.union([z.string(), z.array(ContentBlockSchema)]),
   model: z.string(),
   usage: z.object({
     inputTokens: z.number(),
@@ -52,7 +71,7 @@ export const UpdateSessionSchema = z.object({
 });
 
 export const SendMessageSchema = z.object({
-  content: z.union([z.string(), z.array(z.any())]),
+  content: z.union([z.string(), z.array(ContentBlockSchema)]),
   model: z.string().optional(),
   mode: z.enum(['plan', 'build']).default('build'),
 });
@@ -71,7 +90,7 @@ export const SSEEventSchema = z.object({
     'build_step_done',
     'build_complete',
   ]),
-  data: z.any().optional(),
+  data: z.unknown().optional(),
 });
 
 export type SSEEvent = z.infer<typeof SSEEventSchema>;

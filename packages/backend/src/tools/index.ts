@@ -1,46 +1,62 @@
-import { toolRegistry } from './registry.js'
-import { createBashTool } from './bash.js'
-import { createReadTool } from './read.js'
-import { createWriteTool } from './write.js'
-import { createEditTool } from './edit.js'
-import { createListTool } from './list.js'
-import { createGlobTool } from './glob.js'
-import { createGrepTool } from './grep.js'
+import { createBashTool } from './bash.js';
+import { createEditTool } from './edit.js';
+import { createGlobTool } from './glob.js';
+import { createGrepTool } from './grep.js';
+import { createListTool } from './list.js';
+import { createReadTool } from './read.js';
+import { toolRegistry } from './registry.js';
+import { createTaskTool } from './task.js';
+import { createTimeTool } from './time.js';
 // import { createWebFetchTool } from './webfetch.js'
 // import { createWebSearchTool } from './websearch.js'
-import { createTodoWriteTool } from './todo.js'
-import { createTaskTool } from './task.js'
-import { createTimeTool } from './time.js'
+import { createTodoWriteTool } from './todo.js';
+import { createWriteTool } from './write.js';
 
-export { toolRegistry, registry as toolRegistryInstance } from './registry.js'
-export { sanitize, sanitizeObject } from './sanitize.js'
-export { truncateOutput, cleanupTruncateDir } from './truncate.js'
-export { logPermission, getPermissionLogs, checkPermission } from './permission-log.js'
-export { runInSandbox, readFileInSandbox, writeFileInSandbox, deleteFileInSandbox, listDirInSandbox, globInSandbox, grepInSandbox, stripAnsi } from './docker-sandbox.js'
-export { createTodo, updateTodo, deleteTodo, listTodos, getTodo, loadTodos, saveTodos } from './todo-store.js'
-export { createTask, updateTask, listTasks, getTask, loadTasks, saveTasks } from './task-store.js'
+export type { SandboxConfig, SandboxOptions } from './docker-sandbox.js';
+export {
+  deleteFileInSandbox,
+  globInSandbox,
+  grepInSandbox,
+  listDirInSandbox,
+  readFileInSandbox,
+  runInSandbox,
+  stripAnsi,
+  writeFileInSandbox,
+} from './docker-sandbox.js';
+export { checkPermission, getPermissionLogs, logPermission } from './permission-log.js';
+export { registry as toolRegistryInstance, toolRegistry } from './registry.js';
+export { sanitize, sanitizeObject } from './sanitize.js';
+export type { Task } from './task-store.js';
+export { createTask, getTask, listTasks, loadTasks, saveTasks, updateTask } from './task-store.js';
+export type { Todo } from './todo-store.js';
+export {
+  createTodo,
+  deleteTodo,
+  getTodo,
+  listTodos,
+  loadTodos,
+  saveTodos,
+  updateTodo,
+} from './todo-store.js';
+export { cleanupTruncateDir, truncateOutput } from './truncate.js';
 
-export type { SandboxConfig, SandboxOptions } from './docker-sandbox.js'
-export type { Todo } from './todo-store.js'
-export type { Task } from './task-store.js'
-
-export type { Tool, ToolContext, ExecuteResult, ToolDefinition } from './types.js'
+export type { ExecuteResult, Tool, ToolContext, ToolDefinition } from './types.js';
 
 function registerAllTools() {
-  toolRegistry.register(createBashTool())
-  toolRegistry.register(createReadTool())
-  toolRegistry.register(createWriteTool())
-  toolRegistry.register(createEditTool())
-  toolRegistry.register(createListTool())
-  toolRegistry.register(createGlobTool())
-  toolRegistry.register(createGrepTool())
+  toolRegistry.register(createBashTool());
+  toolRegistry.register(createReadTool());
+  toolRegistry.register(createWriteTool());
+  toolRegistry.register(createEditTool());
+  toolRegistry.register(createListTool());
+  toolRegistry.register(createGlobTool());
+  toolRegistry.register(createGrepTool());
   // toolRegistry.register(createWebFetchTool())
   // toolRegistry.register(createWebSearchTool())
-  toolRegistry.register(createTodoWriteTool())
-  toolRegistry.register(createTaskTool())
-  toolRegistry.register(createTimeTool())
+  toolRegistry.register(createTodoWriteTool());
+  toolRegistry.register(createTaskTool());
+  toolRegistry.register(createTimeTool());
 
-  console.log(`[Tools] Registered ${toolRegistry.listNames().length} tools`)
+  console.log(`[Tools] Registered ${toolRegistry.listNames().length} tools`);
 }
 
-registerAllTools()
+registerAllTools();

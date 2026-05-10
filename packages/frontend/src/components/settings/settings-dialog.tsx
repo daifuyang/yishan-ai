@@ -1,41 +1,50 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import { Settings, Bot, ChevronRight, Plus, Trash2, Loader2, CheckCircle2, XCircle, Plug, Unplug, Edit2, AlertTriangle } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-import { useMCPSStore, MCPServer } from "@/stores/mcp-store";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  AlertTriangle,
+  Bot,
+  CheckCircle2,
+  ChevronRight,
+  Edit2,
+  Loader2,
+  Plug,
+  Plus,
+  Settings,
+  Trash2,
+  Unplug,
+  XCircle,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { type MCPServer, useMCPSStore } from '@/stores/mcp-store';
 
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsSection = "mcp" | "general";
+type SettingsSection = 'mcp' | 'general';
 
 interface MenuItem {
   id: SettingsSection;
@@ -46,21 +55,21 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
-    id: "mcp",
-    label: "MCP",
+    id: 'mcp',
+    label: 'MCP',
     icon: Bot,
-    description: "管理 MCP 服务器和 AI 工具",
+    description: '管理 MCP 服务器和 AI 工具',
   },
   {
-    id: "general",
-    label: "通用设置",
+    id: 'general',
+    label: '通用设置',
     icon: Settings,
-    description: "通用配置选项",
+    description: '通用配置选项',
   },
 ];
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("mcp");
+  const [activeSection, setActiveSection] = useState<SettingsSection>('mcp');
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -75,20 +84,19 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               const Icon = item.icon;
               return (
                 <button
+                  type="button"
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mb-1",
+                    'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mb-1',
                     activeSection === item.id
-                      ? "bg-primary text-primary-foreground font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   )}
                 >
                   <Icon className="h-4 w-4" />
                   <span className="flex-1 text-left">{item.label}</span>
-                  {activeSection === item.id && (
-                    <ChevronRight className="h-3 w-3" />
-                  )}
+                  {activeSection === item.id && <ChevronRight className="h-3 w-3" />}
                 </button>
               );
             })}
@@ -96,18 +104,18 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         </div>
         <div className="flex-1 flex flex-col min-h-0">
           <div className="p-4 border-b">
-            <h2 className="font-semibold">{menuItems.find(m => m.id === activeSection)?.label}</h2>
+            <h2 className="font-semibold">
+              {menuItems.find((m) => m.id === activeSection)?.label}
+            </h2>
             <p className="text-sm text-muted-foreground">
-              {menuItems.find(m => m.id === activeSection)?.description}
+              {menuItems.find((m) => m.id === activeSection)?.description}
             </p>
           </div>
           <ScrollArea className="flex-1">
             <div className="p-4">
-              {activeSection === "mcp" && <MCPSettingsPanel open={open} />}
-              {activeSection === "general" && (
-                <div className="text-sm text-muted-foreground">
-                  通用设置内容开发中...
-                </div>
+              {activeSection === 'mcp' && <MCPSettingsPanel open={open} />}
+              {activeSection === 'general' && (
+                <div className="text-sm text-muted-foreground">通用设置内容开发中...</div>
               )}
             </div>
           </ScrollArea>
@@ -122,9 +130,10 @@ interface MCPSettingsPanelProps {
 }
 
 export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
-  const { servers, tools, fetchServers, addServer, updateServer, removeServer, fetchTools } = useMCPSStore();
+  const { servers, fetchServers, addServer, updateServer, removeServer, fetchTools } =
+    useMCPSStore();
   const [showJsonInput, setShowJsonInput] = useState(false);
-  const [jsonInput, setJsonInput] = useState("");
+  const [jsonInput, setJsonInput] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -149,13 +158,13 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
         await addServer(name, config as MCPServer['config']);
       }
 
-      setJsonInput("");
+      setJsonInput('');
       setShowJsonInput(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof SyntaxError) {
-        setJsonError('JSON 解析错误：' + e.message);
+        setJsonError(`JSON 解析错误：${e.message}`);
       } else {
-        setJsonError('导入失败：' + e.message);
+        setJsonError(`导入失败：${(e as Error).message}`);
       }
     }
   };
@@ -180,11 +189,11 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
       return <XCircle className="h-4 w-4 text-gray-400" />;
     }
     switch (server.status) {
-      case "connected":
+      case 'connected':
         return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      case "connecting":
+      case 'connecting':
         return <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />;
-      case "error":
+      case 'error':
         return <XCircle className="h-4 w-4 text-red-500" />;
       default:
         return <XCircle className="h-4 w-4 text-gray-400" />;
@@ -192,16 +201,16 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
   };
 
   const getStatusText = (server: MCPServer) => {
-    if (!server.enabled) return "已停用";
+    if (!server.enabled) return '已停用';
     switch (server.status) {
-      case "connected":
-        return "已连接";
-      case "connecting":
-        return "连接中...";
-      case "error":
-        return "错误";
+      case 'connected':
+        return '已连接';
+      case 'connecting':
+        return '连接中...';
+      case 'error':
+        return '错误';
       default:
-        return "已断开";
+        return '已断开';
     }
   };
 
@@ -219,7 +228,9 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
         <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
           <p className="text-sm font-medium">输入 JSON 配置</p>
           <Textarea
-            placeholder={'{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "@some/server"]\n    }\n  }\n}'}
+            placeholder={
+              '{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "@some/server"]\n    }\n  }\n}'
+            }
             value={jsonInput}
             onChange={(e) => setJsonInput(e.target.value)}
             className="min-h-[150px] font-mono text-sm"
@@ -231,11 +242,15 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
             </p>
           )}
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" size="sm" onClick={() => {
-              setShowJsonInput(false);
-              setJsonInput("");
-              setJsonError(null);
-            }}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShowJsonInput(false);
+                setJsonInput('');
+                setJsonError(null);
+              }}
+            >
               取消
             </Button>
             <Button size="sm" onClick={handleImportJson}>
@@ -255,29 +270,29 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
             <div
               key={server.name}
               className={cn(
-                "flex items-center gap-3 p-3 border rounded-lg",
-                server.enabled ? "" : "opacity-60"
+                'flex items-center gap-3 p-3 border rounded-lg',
+                server.enabled ? '' : 'opacity-60'
               )}
             >
               {getStatusIcon(server)}
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{server.name}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {server.config.command && <span>{server.config.command} {server.config.args?.join(" ")}</span>}
+                  {server.config.command && (
+                    <span>
+                      {server.config.command} {server.config.args?.join(' ')}
+                    </span>
+                  )}
                   {server.config.url && <span>{server.config.url}</span>}
                 </p>
               </div>
               <div className="flex items-center gap-1">
-                <Badge variant={server.enabled ? "default" : "secondary"} className="text-xs">
+                <Badge variant={server.enabled ? 'default' : 'secondary'} className="text-xs">
                   {getStatusText(server)}
                 </Badge>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setEditingServer(server)}
-                    >
+                    <Button size="icon" variant="ghost" onClick={() => setEditingServer(server)}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -285,11 +300,7 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleToggleEnabled(server)}
-                    >
+                    <Button size="icon" variant="ghost" onClick={() => handleToggleEnabled(server)}>
                       {server.enabled ? (
                         <Unplug className="h-4 w-4" />
                       ) : (
@@ -297,7 +308,7 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
                       )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>{server.enabled ? "停用" : "启用"}</TooltipContent>
+                  <TooltipContent>{server.enabled ? '停用' : '启用'}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -322,46 +333,69 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>编辑 MCP 服务器</DialogTitle>
-            <DialogDescription>
-              修改服务器配置，JSON 将直接覆盖原配置
-            </DialogDescription>
+            <DialogDescription>修改服务器配置，JSON 将直接覆盖原配置</DialogDescription>
           </DialogHeader>
           {editingServer && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">服务器名称</label>
-                <Input value={editingServer.name} disabled />
+                <label htmlFor="mcp-server-name" className="text-sm font-medium">
+                  服务器名称
+                </label>
+                <Input id="mcp-server-name" value={editingServer.name} disabled />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">命令 (如 npx)</label>
+                <label htmlFor="mcp-server-command" className="text-sm font-medium">
+                  命令 (如 npx)
+                </label>
                 <Input
-                  value={editingServer.config.command || ""}
-                  onChange={(e) => setEditingServer({
-                    ...editingServer,
-                    config: { ...editingServer.config, command: e.target.value, url: undefined }
-                  })}
+                  id="mcp-server-command"
+                  value={editingServer.config.command || ''}
+                  onChange={(e) =>
+                    setEditingServer({
+                      ...editingServer,
+                      config: { ...editingServer.config, command: e.target.value, url: undefined },
+                    })
+                  }
                   placeholder="npx"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">参数 (空格分隔)</label>
+                <label htmlFor="mcp-server-args" className="text-sm font-medium">
+                  参数 (空格分隔)
+                </label>
                 <Input
-                  value={editingServer.config.args?.join(" ") || ""}
-                  onChange={(e) => setEditingServer({
-                    ...editingServer,
-                    config: { ...editingServer.config, args: e.target.value.split(" ").filter(Boolean) }
-                  })}
+                  id="mcp-server-args"
+                  value={editingServer.config.args?.join(' ') || ''}
+                  onChange={(e) =>
+                    setEditingServer({
+                      ...editingServer,
+                      config: {
+                        ...editingServer.config,
+                        args: e.target.value.split(' ').filter(Boolean),
+                      },
+                    })
+                  }
                   placeholder="-y @some/server"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">或 URL (HTTP/SSE)</label>
+                <label htmlFor="mcp-server-url" className="text-sm font-medium">
+                  或 URL (HTTP/SSE)
+                </label>
                 <Input
-                  value={editingServer.config.url || ""}
-                  onChange={(e) => setEditingServer({
-                    ...editingServer,
-                    config: { ...editingServer.config, url: e.target.value, command: undefined, args: undefined }
-                  })}
+                  id="mcp-server-url"
+                  value={editingServer.config.url || ''}
+                  onChange={(e) =>
+                    setEditingServer({
+                      ...editingServer,
+                      config: {
+                        ...editingServer.config,
+                        url: e.target.value,
+                        command: undefined,
+                        args: undefined,
+                      },
+                    })
+                  }
                   placeholder="http://localhost:3000/mcp"
                 />
               </div>
@@ -371,9 +405,7 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
             <Button variant="outline" onClick={() => setEditingServer(null)}>
               取消
             </Button>
-            <Button onClick={handleEditSave}>
-              保存
-            </Button>
+            <Button onClick={handleEditSave}>保存</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -391,7 +423,10 @@ export function MCPSettingsPanel({ open }: MCPSettingsPanelProps) {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               取消
             </Button>
-            <Button variant="destructive" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+            >
               删除
             </Button>
           </DialogFooter>

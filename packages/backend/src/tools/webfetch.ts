@@ -1,13 +1,13 @@
-import type { Tool, ToolContext, ExecuteResult } from './types.js'
-import { logPermission } from './permission-log.js'
+import { logPermission } from './permission-log.js';
+import type { ExecuteResult, Tool, ToolContext } from './types.js';
 
 interface WebFetchArgs {
-  url: string
-  description?: string
+  url: string;
+  description?: string;
 }
 
-const ALLOWED_PROTOCOLS = ['http:', 'https:']
-const MAX_RESPONSE_SIZE = 1024 * 1024 // 1MB
+const ALLOWED_PROTOCOLS = ['http:', 'https:'];
+const MAX_RESPONSE_SIZE = 1024 * 1024; // 1MB
 
 export function createWebFetchTool(): Tool {
   return {
@@ -28,38 +28,40 @@ export function createWebFetchTool(): Tool {
       required: ['url'],
     },
     async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
-      const { url, description } = args as WebFetchArgs
+      const { url, description } = args as WebFetchArgs;
 
       if (!url) {
-        throw new Error('url is required')
+        throw new Error('url is required');
       }
 
-      let parsedUrl: URL
+      let parsedUrl: URL;
       try {
-        parsedUrl = new URL(url)
+        parsedUrl = new URL(url);
       } catch {
-        throw new Error(`Invalid URL: ${url}`)
+        throw new Error(`Invalid URL: ${url}`);
       }
 
       if (!ALLOWED_PROTOCOLS.includes(parsedUrl.protocol)) {
-        throw new Error(`Unsupported protocol: ${parsedUrl.protocol}. Only http and https are allowed.`)
+        throw new Error(
+          `Unsupported protocol: ${parsedUrl.protocol}. Only http and https are allowed.`
+        );
       }
 
-      logPermission(ctx.sessionId, 'network', { path: url })
+      logPermission(ctx.sessionId, 'network', { path: url });
 
       try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 30000)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
 
         const response = await fetch(url, {
           signal: controller.signal,
           headers: {
             'User-Agent': 'Yishan-AI/1.0',
-            'Accept': 'text/html,application/json,text/plain,*/*',
+            Accept: 'text/html,application/json,text/plain,*/*',
           },
-        })
+        });
 
-        clearTimeout(timeout)
+        clearTimeout(timeout);
 
         if (!response.ok) {
           return {
@@ -70,13 +72,13 @@ export function createWebFetchTool(): Tool {
               status: response.status,
               statusText: response.statusText,
             },
-          }
+          };
         }
 
-        const contentType = response.headers.get('content-type') || ''
-        const text = await response.text()
-        const truncated = text.length > MAX_RESPONSE_SIZE
-        const output = truncated ? text.slice(0, MAX_RESPONSE_SIZE) + '\n... (truncated)' : text
+        const contentType = response.headers.get('content-type') || '';
+        const text = await response.text();
+        const truncated = text.length > MAX_RESPONSE_SIZE;
+        const output = truncated ? `${text.slice(0, MAX_RESPONSE_SIZE)}\n... (truncated)` : text;
 
         return {
           title: description || new URL(url).hostname,
@@ -88,13 +90,14 @@ export function createWebFetchTool(): Tool {
             truncated,
             originalLength: text.length,
           },
+        };
+      } catch (error: unknown) {
+        const err = error as { name?: string; message?: string };
+        if (err.name === 'AbortError') {
+          throw new Error(`Request timeout: ${url}`);
         }
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          throw new Error(`Request timeout: ${url}`)
-        }
-        throw new Error(`Failed to fetch ${url}: ${error.message}`)
+        throw new Error(`Failed to fetch ${url}: ${err.message}`);
       }
     },
-  }
+  };
 }

@@ -1,22 +1,20 @@
-"use client";
+'use client';
 
-import React, { Suspense, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-
-import { ChatLayout } from "@/components/layout/ChatLayout";
-import { useSessionStore } from "@/stores/session-store";
-import { useChatStore } from "@/stores/chat-store";
-import { useConfigStore } from "@/stores/config-store";
-import { MessageList } from "@/components/chat/message-list";
-import { ChatInputWrapper } from "@/components/chat/chat-input-wrapper";
-import { ChatMain } from "@/components/chat/chat-main";
-import { ChatHeader } from "@/components/chat/chat-header";
-import { useChatScroll } from "@/hooks/use-chat-scroll";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useRouter, useSearchParams } from 'next/navigation';
+import React, { Suspense, useCallback } from 'react';
+import { ChatHeader } from '@/components/chat/chat-header';
+import { ChatInputWrapper } from '@/components/chat/chat-input-wrapper';
+import { ChatMain } from '@/components/chat/chat-main';
+import { MessageList } from '@/components/chat/message-list';
+import { ChatLayout } from '@/components/layout/ChatLayout';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { useChatScroll } from '@/hooks/use-chat-scroll';
+import { useChatStore } from '@/stores/chat-store';
+import { useSessionStore } from '@/stores/session-store';
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
-  const { sessions, activeId, createSession, deleteSession, fetchSessions, setActiveId } = useSessionStore();
+  const { sessions, activeId, createSession, deleteSession, setActiveId } = useSessionStore();
   const {
     messages,
     isStreaming,
@@ -29,10 +27,6 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     clearMessages,
     rollbackMessage,
   } = useChatStore();
-
-
-
-  const { fetchConfig } = useConfigStore();
 
   const session = sessions.find((s) => s.id === activeId);
   const prevSessionIdRef = React.useRef<string | null>(null);
@@ -62,7 +56,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     fetchMessages(sessionId)
       .then(() => {
         if (cancelled) return;
-        scrollToBottom("instant");
+        scrollToBottom('instant');
 
         if (isNewSession) {
           const pendingKey = `pending_message_${sessionId}`;
@@ -79,7 +73,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
         console.error('Failed to fetch messages:', error);
         clearMessages();
         setActiveId(null);
-        router.push("/");
+        router.push('/');
       });
 
     return () => {
@@ -88,7 +82,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   }, [sessionId, setActiveId, fetchMessages, scrollToBottom, clearMessages, router, sendMessage]);
 
   const handleSend = useCallback(
-    async (content: string, model: string, mode: "plan" | "build") => {
+    async (content: string, model: string, mode: 'plan' | 'build') => {
       if (!activeId) {
         const createResult = await createSession(model);
 
@@ -111,7 +105,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   );
 
   const handleRetry = useCallback(
-    async (messageId: string, model: string, mode: "plan" | "build") => {
+    async (messageId: string, model: string, mode: 'plan' | 'build') => {
       if (!activeId) return;
       retryMessage(activeId, messageId, model, mode);
     },
@@ -125,7 +119,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   }, [activeId, stopStream]);
 
   const handleRollback = useCallback(
-    async (messageId: string, content: string) => {
+    async (messageId: string, _content: string) => {
       if (!activeId) return;
       rollbackMessage(activeId, messageId);
     },
@@ -136,7 +130,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     async (id: string) => {
       await deleteSession(id);
       clearMessages();
-      router.push("/");
+      router.push('/');
     },
     [deleteSession, clearMessages, router]
   );
@@ -147,9 +141,9 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ChatHeader
-        title={session?.title || "新对话"}
+        title={session?.title || '新对话'}
         onDelete={activeId ? () => handleDeleteSession(activeId) : undefined}
-        onTitleClick={() => router.push("/")}
+        onTitleClick={() => router.push('/')}
       />
 
       <ChatMain
@@ -159,11 +153,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
         showScrollButton={showScrollButton}
         scrollToBottom={scrollToBottom}
         messages={
-          <MessageList
-            messages={messages}
-            onRollback={handleRollback}
-            onRetry={handleRetry}
-          />
+          <MessageList messages={messages} onRollback={handleRollback} onRetry={handleRetry} />
         }
       />
 
@@ -187,7 +177,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
 
 function ChatContentWithParams() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get("sessionId");
+  const sessionId = searchParams.get('sessionId');
   return <ChatContent sessionId={sessionId} />;
 }
 

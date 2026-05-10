@@ -18,7 +18,7 @@ export interface MCPServer {
 export interface MCPTool {
   name: string;
   description: string;
-  inputSchema: any;
+  inputSchema: Record<string, unknown>;
 }
 
 interface MCPSStore {
@@ -26,7 +26,10 @@ interface MCPSStore {
   tools: MCPTool[];
   fetchServers: () => Promise<void>;
   addServer: (name: string, config: MCPServer['config']) => Promise<void>;
-  updateServer: (name: string, updates: { config?: MCPServer['config']; enabled?: boolean }) => Promise<void>;
+  updateServer: (
+    name: string,
+    updates: { config?: MCPServer['config']; enabled?: boolean }
+  ) => Promise<void>;
   removeServer: (name: string) => Promise<void>;
   connectServer: (name: string) => Promise<void>;
   disconnectServer: (name: string) => Promise<void>;
@@ -52,7 +55,10 @@ export const useMCPSStore = create<MCPSStore>((set, get) => ({
     await get().fetchServers();
   },
 
-  updateServer: async (name: string, updates: { config?: MCPServer['config']; enabled?: boolean }) => {
+  updateServer: async (
+    name: string,
+    updates: { config?: MCPServer['config']; enabled?: boolean }
+  ) => {
     await fetch(apiUrl(`/api/mcp/servers/${name}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

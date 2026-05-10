@@ -1,7 +1,7 @@
-import fs from 'fs-extra';
-import path from 'node:path';
-import os from 'node:os';
 import { watch } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'fs-extra';
 
 const CONFIG_DIR = path.join(os.homedir(), '.yishan-ai');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
@@ -134,7 +134,11 @@ class ConfigManager {
   private mergeWithDefaults(loaded: Partial<ConfigSchema>): ConfigSchema {
     return {
       meta: { ...DEFAULT_CONFIG.meta, ...loaded.meta },
-      models: { ...DEFAULT_CONFIG.models, ...loaded.models, models: loaded.models?.models || DEFAULT_CONFIG.models.models },
+      models: {
+        ...DEFAULT_CONFIG.models,
+        ...loaded.models,
+        models: loaded.models?.models || DEFAULT_CONFIG.models.models,
+      },
       workspace: { ...DEFAULT_CONFIG.workspace, ...loaded.workspace },
       tools: {
         fs: { ...DEFAULT_CONFIG.tools.fs, ...loaded.tools?.fs },
@@ -160,7 +164,7 @@ class ConfigManager {
     }
     if (process.env.PORT) {
       const port = parseInt(process.env.PORT, 10);
-      if (!isNaN(port)) {
+      if (!Number.isNaN(port)) {
         config.server.port = port;
       }
     }
@@ -194,13 +198,14 @@ class ConfigManager {
     this.config = this.loadConfig();
   }
 
-  get<T = any>(key: string): T {
+  get<T = unknown>(key: string): T {
     const keys = key.split('.');
-    let value: any = this.config;
+    let value: ConfigSchema | unknown = this.config;
 
     for (const k of keys) {
       if (value === undefined || value === null) return undefined as T;
-      value = value[k];
+      if (typeof value !== 'object') return undefined as T;
+      value = (value as Record<string, unknown>)[k];
     }
 
     if (typeof value === 'string') {
@@ -220,16 +225,16 @@ class ConfigManager {
     this.save();
   }
 
-  patch(path: string, value: any): void {
+  patch(path: string, value: unknown): void {
     const keys = path.split('.');
-    let current: any = this.config;
+    let current: Record<string, unknown> = this.config as unknown as Record<string, unknown>;
 
     for (let i = 0; i < keys.length - 1; i++) {
       const k = keys[i];
       if (!(k in current)) {
         current[k] = {};
       }
-      current = current[k];
+      current = current[k] as Record<string, unknown>;
     }
 
     current[keys[keys.length - 1]] = value;

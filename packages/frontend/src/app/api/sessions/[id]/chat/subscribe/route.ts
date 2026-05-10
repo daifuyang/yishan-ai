@@ -1,9 +1,6 @@
 import { createBackendUrl } from '@/lib/backend-fetch';
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const backendUrl = `${createBackendUrl(`/api/sessions/${id}/chat/subscribe`)}`;
@@ -12,9 +9,9 @@ export async function GET(
 
     const response = await fetch(backendUrl, {
       headers: {
-        'Accept': 'text/event-stream',
+        Accept: 'text/event-stream',
         'Cache-Control': 'no-cache',
-        ...(cookieHeader && { 'Cookie': cookieHeader }),
+        ...(cookieHeader && { Cookie: cookieHeader }),
       },
     });
 
@@ -34,14 +31,14 @@ export async function GET(
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   } catch (error) {
     console.error('[API] SSE subscribe error:', error);
-    return new Response(
-      JSON.stringify({ type: 'error', message: 'SSE 连接失败' }),
-      { status: 502, headers: { 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ type: 'error', message: 'SSE 连接失败' }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }

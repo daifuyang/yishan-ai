@@ -18,7 +18,7 @@ export interface StartParams {
   sessionId: string;
   userMessage: string;
   options: StreamOptions;
-  tools: any[];
+  tools: unknown[];
 }
 
 export type SSEEventType =
@@ -33,7 +33,7 @@ export type SSEEventType =
 export interface SSEEvent {
   type: SSEEventType;
   delta?: { type: 'text_delta'; text: string };
-  data?: any;
+  data?: unknown;
   message?: string;
   content?: string;
 }

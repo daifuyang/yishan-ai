@@ -1,7 +1,7 @@
-import { FastifyPluginAsync } from 'fastify';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import type { FastifyPluginAsync } from 'fastify';
 
 const LOG_DIR = process.env.LOG_DIR || path.join(os.homedir(), '.yishan-ai', 'logs');
 
@@ -11,9 +11,10 @@ const logsRoutes: FastifyPluginAsync = async (fastify) => {
       return [];
     }
 
-    const files = fs.readdirSync(LOG_DIR)
-      .filter(f => f.endsWith('.log'))
-      .map(filename => {
+    const files = fs
+      .readdirSync(LOG_DIR)
+      .filter((f) => f.endsWith('.log'))
+      .map((filename) => {
         const filePath = path.join(LOG_DIR, filename);
         const stats = fs.statSync(filePath);
         return {

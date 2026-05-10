@@ -1,7 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getSkillManager } from '../lib/skill-manager.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,12 +39,12 @@ export async function buildSystemPrompt(options: SystemPromptOptions): Promise<{
   const skillManager = getSkillManager();
   const enabledSkills = await skillManager.getEnabledSkills();
 
-  const skillsContent = enabledSkills.length > 0
-    ? enabledSkills.map(s => `【${s.metadata.name}】\n${s.content}`).join('\n\n')
-    : '无';
+  const skillsContent =
+    enabledSkills.length > 0
+      ? enabledSkills.map((s) => `【${s.metadata.name}】\n${s.content}`).join('\n\n')
+      : '无';
 
-  const basePrompt = PROMPT_DEFAULT
-    .replace('{{WORK_DIR}}', workDir || '需配置')
+  const basePrompt = PROMPT_DEFAULT.replace('{{WORK_DIR}}', workDir || '需配置')
     .replace('{{SANDBOX_DIRS}}', sandboxDirs.length > 0 ? sandboxDirs.join('、') : '需配置')
     .replace('{{TOOL_LIST}}', toolList || '无')
     .replace('{{SKILLS}}', skillsContent);

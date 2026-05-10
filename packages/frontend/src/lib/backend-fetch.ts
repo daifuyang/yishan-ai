@@ -5,10 +5,7 @@ interface FetchOptions extends RequestInit {
   timeout?: number;
 }
 
-export async function fetchWithTimeout(
-  url: string,
-  options: FetchOptions = {}
-): Promise<Response> {
+export async function fetchWithTimeout(url: string, options: FetchOptions = {}): Promise<Response> {
   const { timeout = DEFAULT_TIMEOUT, ...fetchOptions } = options;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -33,10 +30,7 @@ export function createBackendUrl(path: string): string {
   return `${BACKEND_URL}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-export async function backendFetch(
-  path: string,
-  options: FetchOptions = {}
-): Promise<Response> {
+export async function backendFetch(path: string, options: FetchOptions = {}): Promise<Response> {
   const url = createBackendUrl(path);
 
   try {
@@ -44,9 +38,7 @@ export async function backendFetch(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
-      throw new Error(
-        `Backend error ${response.status}: ${errorText || response.statusText}`
-      );
+      throw new Error(`Backend error ${response.status}: ${errorText || response.statusText}`);
     }
 
     return response;

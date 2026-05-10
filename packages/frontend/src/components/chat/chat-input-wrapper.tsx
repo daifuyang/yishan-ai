@@ -1,8 +1,7 @@
 'use client';
 
-import React from 'react';
-import { ChatInput } from './chat-input';
 import type { ChatMode } from '@/lib/constants';
+import { ChatInput } from './chat-input';
 
 interface ChatInputWrapperProps {
   onSend: (content: string, model: string, mode: ChatMode) => void;

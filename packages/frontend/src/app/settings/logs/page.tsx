@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { ArrowLeft, FileText, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
-import { ArrowLeft, RefreshCw, FileText } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { apiUrl } from '@/lib/api-base';
 import {
   Select,
   SelectContent,
@@ -12,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { apiUrl } from '@/lib/api-base';
+
 interface LogFile {
   filename: string;
   size: number;
@@ -56,23 +57,35 @@ function parseLogLine(line: string, lineNum: number): LogEntry {
 
 function getLevelName(level: number): string {
   switch (level) {
-    case 10: return 'TRACE';
-    case 20: return 'DEBUG';
-    case 30: return 'INFO';
-    case 40: return 'WARN';
-    case 50: return 'ERROR';
-    default: return 'INFO';
+    case 10:
+      return 'TRACE';
+    case 20:
+      return 'DEBUG';
+    case 30:
+      return 'INFO';
+    case 40:
+      return 'WARN';
+    case 50:
+      return 'ERROR';
+    default:
+      return 'INFO';
   }
 }
 
 function getLevelColor(level: number): string {
   switch (level) {
-    case 10: return 'text-gray-400';
-    case 20: return 'text-gray-500';
-    case 30: return 'text-blue-500';
-    case 40: return 'text-yellow-500';
-    case 50: return 'text-red-500';
-    default: return 'text-blue-500';
+    case 10:
+      return 'text-gray-400';
+    case 20:
+      return 'text-gray-500';
+    case 30:
+      return 'text-blue-500';
+    case 40:
+      return 'text-yellow-500';
+    case 50:
+      return 'text-red-500';
+    default:
+      return 'text-blue-500';
   }
 }
 
@@ -82,17 +95,7 @@ function LogsContent() {
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchFiles();
-  }, []);
-
-  useEffect(() => {
-    if (selectedFile) {
-      fetchContent(selectedFile);
-    }
-  }, [selectedFile]);
-
-  async function fetchFiles() {
+  const fetchFiles = useCallback(async () => {
     try {
       const res = await fetch(apiUrl('/api/logs'));
       const data = await res.json();
@@ -103,9 +106,9 @@ function LogsContent() {
     } catch (e) {
       console.error('Failed to fetch logs:', e);
     }
-  }
+  }, [selectedFile]);
 
-  async function fetchContent(filename: string) {
+  const fetchContent = useCallback(async (filename: string) => {
     setLoading(true);
     try {
       const res = await fetch(apiUrl(`/api/logs/${filename}`));
@@ -116,15 +119,25 @@ function LogsContent() {
       setContent('Error loading log');
     }
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    fetchFiles();
+  }, [fetchFiles]);
+
+  useEffect(() => {
+    if (selectedFile) {
+      fetchContent(selectedFile);
+    }
+  }, [selectedFile, fetchContent]);
 
   function formatBytes(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  function formatDate(iso: string): string {
+  function _formatDate(iso: string): string {
     return new Date(iso).toLocaleString();
   }
 
@@ -150,7 +163,7 @@ function LogsContent() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {files.map(f => (
+              {files.map((f) => (
                 <SelectItem key={f.filename} value={f.filename} className="flex items-center gap-2">
                   <FileText className="w-4 h-4 inline mr-2" />
                   <span>{f.filename}</span>
@@ -176,16 +189,10 @@ function LogsContent() {
             {content.split('\n').map((line, i) => {
               const entry = parseLogLine(line, i + 1);
               return (
-                <div key={i} className="py-0.5 hover:bg-muted/50">
-                  <span className="text-muted-foreground mr-2 select-none">
-                    {entry.line}
-                  </span>
-                  <span className={`${getLevelColor(entry.level)} mr-2`}>
-                    {entry.levelName}
-                  </span>
-                  <span className="text-muted-foreground mr-3">
-                    {entry.time}
-                  </span>
+                <div key={entry.line} className="py-0.5 hover:bg-muted/50">
+                  <span className="text-muted-foreground mr-2 select-none">{entry.line}</span>
+                  <span className={`${getLevelColor(entry.level)} mr-2`}>{entry.levelName}</span>
+                  <span className="text-muted-foreground mr-3">{entry.time}</span>
                   <span className="text-foreground">{entry.message}</span>
                 </div>
               );

@@ -1,7 +1,7 @@
-import { NextRequest } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
+import type { NextRequest } from 'next/server';
 
 function getConfiguredDirs(): string[] {
   const configPath = path.join(os.homedir(), '.yishan-ai', 'config.json');
@@ -12,7 +12,7 @@ function getConfiguredDirs(): string[] {
         return config.workspace.directories;
       }
     }
-  } catch (e) {}
+  } catch (_e) {}
   return [];
 }
 
@@ -28,9 +28,11 @@ function resolveHostPath(requestedPath: string): string | null {
       return requestedResolved;
     }
 
-    const requestedBasename = path.basename(requestedPath);
-    if (requestedPath === path.basename(dir) ||
-        requestedPath.startsWith(path.basename(dir) + '/')) {
+    const _requestedBasename = path.basename(requestedPath);
+    if (
+      requestedPath === path.basename(dir) ||
+      requestedPath.startsWith(`${path.basename(dir)}/`)
+    ) {
       const remainder = requestedPath.slice(path.basename(dir).length).replace(/^\//, '');
       const fullPath = remainder ? path.join(dir, remainder) : dir;
       if (fs.existsSync(fullPath)) {
@@ -78,7 +80,7 @@ export async function GET(request: NextRequest) {
       items,
       parent: path.dirname(requestedPath).replace(/\\/g, '/'),
     });
-  } catch (error) {
+  } catch (_error) {
     return Response.json({ error: 'Failed to read directory' }, { status: 500 });
   }
 }

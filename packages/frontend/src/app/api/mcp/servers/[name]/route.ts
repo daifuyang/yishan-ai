@@ -16,9 +16,10 @@ export async function POST(request: Request) {
   const name = pathParts[pathParts.length - 2];
   const action = pathParts[pathParts.length - 1];
 
-  const endpoint = action === 'connect' || action === 'disconnect'
-    ? `${BACKEND_URL}/api/mcp/servers/${name}/${action}`
-    : `${BACKEND_URL}/api/mcp/servers/${name}`;
+  const endpoint =
+    action === 'connect' || action === 'disconnect'
+      ? `${BACKEND_URL}/api/mcp/servers/${name}/${action}`
+      : `${BACKEND_URL}/api/mcp/servers/${name}`;
 
   const res = await fetch(endpoint, {
     method: 'POST',

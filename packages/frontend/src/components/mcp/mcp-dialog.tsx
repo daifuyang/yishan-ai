@@ -1,31 +1,27 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import { Bot, Plus, Trash2, Plug, Unplug, AlertTriangle } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMCPSStore, MCPServer } from "@/stores/mcp-store";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { AlertTriangle, Bot, Plug, Plus, Trash2, Unplug } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { type MCPServer, useMCPSStore } from '@/stores/mcp-store';
 
 interface MCPDialogProps {
   open: boolean;
@@ -41,9 +37,7 @@ export function MCPDialog({ open, onOpenChange }: MCPDialogProps) {
             <Bot className="h-5 w-5" />
             MCP 服务器
           </SheetTitle>
-          <SheetDescription>
-            管理 MCP 服务器和 AI 工具
-          </SheetDescription>
+          <SheetDescription>管理 MCP 服务器和 AI 工具</SheetDescription>
         </SheetHeader>
         <MCPDialogContent open={open} />
       </SheetContent>
@@ -56,11 +50,12 @@ interface MCPDialogContentProps {
 }
 
 function MCPDialogContent({ open }: MCPDialogContentProps) {
-  const { servers, fetchServers, addServer, updateServer, removeServer, fetchTools } = useMCPSStore();
+  const { servers, fetchServers, addServer, updateServer, removeServer, fetchTools } =
+    useMCPSStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
-  const [jsonInput, setJsonInput] = useState("");
+  const [jsonInput, setJsonInput] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
@@ -73,7 +68,7 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
 
   const openAddDialog = () => {
     setDialogMode('add');
-    setJsonInput("");
+    setJsonInput('');
     setJsonError(null);
     setEditingServer(null);
     setDialogOpen(true);
@@ -109,11 +104,11 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
 
       setDialogOpen(false);
       fetchServers();
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof SyntaxError) {
-        setJsonError('JSON 解析错误：' + e.message);
+        setJsonError(`JSON 解析错误：${e.message}`);
       } else {
-        setJsonError(e.message);
+        setJsonError((e as Error).message);
       }
     }
   };
@@ -130,16 +125,16 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
   };
 
   const getStatusText = (server: MCPServer) => {
-    if (!server.enabled) return "已停用";
+    if (!server.enabled) return '已停用';
     switch (server.status) {
-      case "connected":
-        return "已连接";
-      case "connecting":
-        return "连接中...";
-      case "error":
-        return "错误";
+      case 'connected':
+        return '已连接';
+      case 'connecting':
+        return '连接中...';
+      case 'error':
+        return '错误';
       default:
-        return "已断开";
+        return '已断开';
     }
   };
 
@@ -147,9 +142,7 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
     <div className="flex flex-col flex-1 min-h-0 mt-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3 shrink-0">
-        <h3 className="font-medium text-sm">
-          已配置的服务器 ({servers.length})
-        </h3>
+        <h3 className="font-medium text-sm">已配置的服务器 ({servers.length})</h3>
         <Button size="sm" onClick={openAddDialog}>
           <Plus className="h-4 w-4 mr-1" />
           添加服务器
@@ -184,7 +177,14 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button size="icon" variant="ghost" onClick={() => openEditDialog(server)}>
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg
+                          className="h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <title>编辑</title>
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
@@ -194,7 +194,11 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" onClick={() => handleToggleEnabled(server)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleToggleEnabled(server)}
+                      >
                         {server.enabled ? (
                           <Unplug className="h-4 w-4" />
                         ) : (
@@ -202,11 +206,15 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
                         )}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>{server.enabled ? "停用" : "启用"}</TooltipContent>
+                    <TooltipContent>{server.enabled ? '停用' : '启用'}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" onClick={() => setDeleteConfirm(server.name)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setDeleteConfirm(server.name)}
+                      >
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
                     </TooltipTrigger>
@@ -238,16 +246,23 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
             )}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">JSON 配置</label>
+                <label htmlFor="mcp-dialog-json-config" className="text-sm font-medium">
+                  JSON 配置
+                </label>
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setJsonInput('{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "@some/server"]\n    }\n  }\n}')}
+                  onClick={() =>
+                    setJsonInput(
+                      '{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "@some/server"]\n    }\n  }\n}'
+                    )
+                  }
                 >
                   填充模板
                 </Button>
               </div>
               <Textarea
+                id="mcp-dialog-json-config"
                 value={jsonInput}
                 onChange={(e) => {
                   setJsonInput(e.target.value);
@@ -288,7 +303,10 @@ function MCPDialogContent({ open }: MCPDialogContentProps) {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               取消
             </Button>
-            <Button variant="destructive" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+            >
               删除
             </Button>
           </DialogFooter>

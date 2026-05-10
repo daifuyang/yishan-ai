@@ -1,22 +1,22 @@
-'use client'
+'use client';
 
-import { useState, type ReactNode, type CSSProperties } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronRight, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { TextShimmer } from '@/components/ui/text-shimmer'
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronRight, Loader2 } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
+import { TextShimmer } from '@/components/ui/text-shimmer';
+import { cn } from '@/lib/utils';
 
 export interface ToolCardProps {
-  icon?: ReactNode
-  title: string
-  subtitle?: string
-  status?: 'pending' | 'running' | 'completed' | 'error'
-  defaultOpen?: boolean
-  hideDetails?: boolean
-  children?: ReactNode
-  onSubtitleClick?: () => void
-  className?: string
-  action?: ReactNode
+  icon?: ReactNode;
+  title: string;
+  subtitle?: string;
+  status?: 'pending' | 'running' | 'completed' | 'error';
+  defaultOpen?: boolean;
+  hideDetails?: boolean;
+  children?: ReactNode;
+  onSubtitleClick?: () => void;
+  className?: string;
+  action?: ReactNode;
 }
 
 export function ToolCard({
@@ -30,14 +30,16 @@ export function ToolCard({
   className,
   action,
 }: ToolCardProps) {
-  const [open, setOpen] = useState(defaultOpen)
-  const pending = status === 'pending' || status === 'running'
+  const [open, setOpen] = useState(defaultOpen);
+  const pending = status === 'pending' || status === 'running';
 
   return (
     <div className={cn('tool-card', className)} data-status={status}>
-      <div
-        className="tool-card-trigger"
+      <button
+        type="button"
+        className="tool-card-trigger w-full text-left"
         onClick={() => !pending && !hideDetails && setOpen(!open)}
+        disabled={pending}
       >
         <div className="tool-card-trigger-content">
           <div className="tool-card-indicator">
@@ -48,20 +50,10 @@ export function ToolCard({
           <div className="tool-card-info">
             <div className="tool-card-info-structured">
               <div className="tool-card-info-main">
-                <TextShimmer
-                  text={title}
-                  active={pending}
-                  className="tool-card-title"
-                />
-                {!pending && subtitle && (
-                  <span className="tool-card-subtitle">
-                    {subtitle}
-                  </span>
-                )}
+                <TextShimmer text={title} active={pending} className="tool-card-title" />
+                {!pending && subtitle && <span className="tool-card-subtitle">{subtitle}</span>}
               </div>
-              {!pending && action && (
-                <span className="tool-card-action">{action}</span>
-              )}
+              {!pending && action && <span className="tool-card-action">{action}</span>}
             </div>
           </div>
         </div>
@@ -75,7 +67,7 @@ export function ToolCard({
             <ChevronRight className="h-4 w-4" />
           </motion.span>
         )}
-      </div>
+      </button>
 
       <AnimatePresence>
         {open && (
@@ -91,5 +83,5 @@ export function ToolCard({
         )}
       </AnimatePresence>
     </div>
-  )
+  );
 }

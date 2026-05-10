@@ -23,27 +23,27 @@ const SENSITIVE_PATTERNS: RegExp[] = [
   /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----/gi,
   // Generic API key pattern (long alphanumeric strings that look like keys)
   /[a-zA-Z0-9]{32,}(?=\s|$|['",;])/g,
-]
+];
 
-const REDACTED = '***REDACTED***'
+const REDACTED = '***REDACTED***';
 
 export function sanitize(content: string): string {
-  if (!content) return content
+  if (!content) return content;
 
-  let result = content
+  let result = content;
 
   for (const pattern of SENSITIVE_PATTERNS) {
-    result = result.replace(pattern, REDACTED)
+    result = result.replace(pattern, REDACTED);
   }
 
-  return result
+  return result;
 }
 
 export function sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
+  const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    const lowerKey = key.toLowerCase()
+    const lowerKey = key.toLowerCase();
 
     if (
       lowerKey.includes('key') ||
@@ -53,15 +53,15 @@ export function sanitizeObject(obj: Record<string, unknown>): Record<string, unk
       lowerKey.includes('credential') ||
       lowerKey.includes('auth')
     ) {
-      result[key] = REDACTED
+      result[key] = REDACTED;
     } else if (typeof value === 'string') {
-      result[key] = sanitize(value)
+      result[key] = sanitize(value);
     } else if (typeof value === 'object' && value !== null) {
-      result[key] = sanitizeObject(value as Record<string, unknown>)
+      result[key] = sanitizeObject(value as Record<string, unknown>);
     } else {
-      result[key] = value
+      result[key] = value;
     }
   }
 
-  return result
+  return result;
 }

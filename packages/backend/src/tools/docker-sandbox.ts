@@ -1,45 +1,47 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import * as fs from 'fs'
-import * as path from 'path'
-import * as os from 'os'
-import { configManager } from '../lib/config-manager.js'
+import { exec } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { promisify } from 'node:util';
+import { configManager } from '../lib/config-manager.js';
 
-const execAsync = promisify(exec)
+const execAsync = promisify(exec);
 
-const SECCOMP_PATH = path.join(os.homedir(), '.yishan-ai/isolated/seccomp.json')
+const SECCOMP_PATH = path.join(os.homedir(), '.yishan-ai/isolated/seccomp.json');
 
 export interface SandboxConfig {
-  enabled: boolean
-  memoryLimit?: string
-  pidsLimit?: number
-  tmpfsSize?: string
-  readOnly?: boolean
+  enabled: boolean;
+  memoryLimit?: string;
+  pidsLimit?: number;
+  tmpfsSize?: string;
+  readOnly?: boolean;
 }
 
 export interface SandboxOptions {
-  command: string
-  workDir?: string
-  timeout?: number
+  command: string;
+  workDir?: string;
+  timeout?: number;
 }
 
 function getSafeDirs(): string[] {
   try {
-    const configPath = path.join(os.homedir(), '.yishan-ai/config.json')
+    const configPath = path.join(os.homedir(), '.yishan-ai/config.json');
     if (fs.existsSync(configPath)) {
-      const content = fs.readFileSync(configPath, 'utf-8')
-      const config = JSON.parse(content)
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(content);
       if (config.workspace?.directories) {
-        return config.workspace.directories.map((d: string) => {
-          if (d.startsWith('~')) return d.replace('~', os.homedir())
-          return d
-        }).filter((d: string) => fs.existsSync(d))
+        return config.workspace.directories
+          .map((d: string) => {
+            if (d.startsWith('~')) return d.replace('~', os.homedir());
+            return d;
+          })
+          .filter((d: string) => fs.existsSync(d));
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // ignore
   }
-  return [os.homedir() + '/yishan-workspace']
+  return [`${os.homedir()}/yishan-workspace`];
 }
 
 function getDefaultConfig(): SandboxConfig {
@@ -49,26 +51,29 @@ function getDefaultConfig(): SandboxConfig {
     pidsLimit: configManager.get('sandbox.pidsLimit') ?? 64,
     tmpfsSize: configManager.get('sandbox.tmpfsSize') ?? '64m',
     readOnly: configManager.get('sandbox.readOnly') ?? false,
-  }
+  };
 }
 
-export async function runInSandbox(options: SandboxOptions): Promise<{ stdout: string; stderr: string }> {
-  const config = getDefaultConfig()
+export async function runInSandbox(
+  options: SandboxOptions
+): Promise<{ stdout: string; stderr: string }> {
+  const config = getDefaultConfig();
 
   if (!config.enabled) {
     const { stdout, stderr } = await execAsync(options.command, {
       cwd: options.workDir,
       timeout: options.timeout || 60000,
       shell: '/bin/bash',
-    })
-    return { stdout, stderr }
+    });
+    return { stdout, stderr };
   }
 
-  const encodedCommand = Buffer.from(options.command).toString('base64')
-  const safeDirs = getSafeDirs()
-  const workDir = options.workDir || safeDirs[0]
+  const encodedCommand = Buffer.from(options.command).toString('base64');
+  const safeDirs = getSafeDirs();
+  const workDir = options.workDir || safeDirs[0];
 
-  const dockerCmd = `docker run --rm ` +
+  const dockerCmd =
+    `docker run --rm ` +
     `--user $(id -u):$(id -g) ` +
     `--group-add $(id -g) ` +
     `--cap-drop ALL ` +
@@ -83,33 +88,36 @@ export async function runInSandbox(options: SandboxOptions): Promise<{ stdout: s
     `--tmpfs /tmp:rw,noexec,nosuid,size=${config.tmpfsSize || '64m'} ` +
     `--tmpfs /var/run:rw,noexec,nosuid,size=8m ` +
     `--entrypoint /bin/bash ` +
-    `${safeDirs.map(d => `-v "${d}:${d}:rw"`).join(' ')} ` +
-    `isolated -c 'echo ${encodedCommand} | base64 -d | /bin/bash'`
+    `${safeDirs.map((d) => `-v "${d}:${d}:rw"`).join(' ')} ` +
+    `isolated -c 'echo ${encodedCommand} | base64 -d | /bin/bash'`;
 
   const { stdout, stderr } = await execAsync(dockerCmd, {
     cwd: options.workDir,
     timeout: options.timeout || 60000,
-  })
+  });
 
-  return { stdout, stderr }
+  return { stdout, stderr };
 }
 
 export function stripAnsi(str: string): string {
-  return str.replace(/[\x1b\x9b][\(]?[0-?]*[ -/]*[@-~]/g, '')
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+  const esc = String.fromCharCode(0x1b);
+  return str
+    .replace(new RegExp(`${esc}\\[[0-9;]*[a-zA-Z]`, 'g'), '')
+    .replace(new RegExp(`${esc}[(]?[0-?]*[ -/]*[@-~]`, 'g'), '');
 }
 
 export async function readFileInSandbox(filePath: string, workDir: string): Promise<string> {
-  const config = getDefaultConfig()
+  const config = getDefaultConfig();
 
   if (!config.enabled) {
-    return fs.readFileSync(filePath, 'utf8')
+    return fs.readFileSync(filePath, 'utf8');
   }
 
-  const safeDirs = getSafeDirs()
-  const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:ro"`).join(' ')
+  const safeDirs = getSafeDirs();
+  const volumeMounts = safeDirs.map((d) => `-v "${d}:${d}:ro"`).join(' ');
 
-  const dockerCmd = `docker run --rm ` +
+  const dockerCmd =
+    `docker run --rm ` +
     `--user $(id -u):$(id -g) ` +
     `--group-add $(id -g) ` +
     `--cap-drop ALL ` +
@@ -122,23 +130,28 @@ export async function readFileInSandbox(filePath: string, workDir: string): Prom
     `--workdir ${workDir} ` +
     `--tmpfs /tmp:rw,noexec,nosuid,size=32m ` +
     `${volumeMounts} ` +
-    `isolated -c 'cat "${filePath}"'`
+    `isolated -c 'cat "${filePath}"'`;
 
   const { stdout } = await execAsync(dockerCmd, {
     timeout: 30000,
-  })
+  });
 
-  return stripAnsi(stdout)
+  return stripAnsi(stdout);
 }
 
-export async function writeFileInSandbox(filePath: string, content: string, workDir: string): Promise<void> {
-  const config = getDefaultConfig()
+export async function writeFileInSandbox(
+  filePath: string,
+  content: string,
+  workDir: string
+): Promise<void> {
+  const config = getDefaultConfig();
 
-  const encodedContent = Buffer.from(content).toString('base64')
-  const safeDirs = getSafeDirs()
-  const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:rw"`).join(' ')
+  const encodedContent = Buffer.from(content).toString('base64');
+  const safeDirs = getSafeDirs();
+  const volumeMounts = safeDirs.map((d) => `-v "${d}:${d}:rw"`).join(' ');
 
-  const dockerCmd = `docker run --rm ` +
+  const dockerCmd =
+    `docker run --rm ` +
     `--user $(id -u):$(id -g) ` +
     `--group-add $(id -g) ` +
     `--cap-drop ALL ` +
@@ -150,20 +163,21 @@ export async function writeFileInSandbox(filePath: string, content: string, work
     `--workdir ${workDir} ` +
     `--tmpfs /tmp:rw,noexec,nosuid,size=32m ` +
     `${volumeMounts} ` +
-    `isolated -c 'echo ${encodedContent} | base64 -d > "${filePath}"'`
+    `isolated -c 'echo ${encodedContent} | base64 -d > "${filePath}"'`;
 
   await execAsync(dockerCmd, {
     timeout: 30000,
-  })
+  });
 }
 
 export async function deleteFileInSandbox(filePath: string, workDir: string): Promise<void> {
-  const config = getDefaultConfig()
+  const config = getDefaultConfig();
 
-  const safeDirs = getSafeDirs()
-  const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:rw"`).join(' ')
+  const safeDirs = getSafeDirs();
+  const volumeMounts = safeDirs.map((d) => `-v "${d}:${d}:rw"`).join(' ');
 
-  const dockerCmd = `docker run --rm ` +
+  const dockerCmd =
+    `docker run --rm ` +
     `--user $(id -u):$(id -g) ` +
     `--group-add $(id -g) ` +
     `--cap-drop ALL ` +
@@ -175,20 +189,21 @@ export async function deleteFileInSandbox(filePath: string, workDir: string): Pr
     `--workdir ${workDir} ` +
     `--tmpfs /tmp:rw,noexec,nosuid,size=32m ` +
     `${volumeMounts} ` +
-    `isolated -c 'rm "${filePath}"'`
+    `isolated -c 'rm "${filePath}"'`;
 
   await execAsync(dockerCmd, {
     timeout: 30000,
-  })
+  });
 }
 
 export async function listDirInSandbox(dirPath: string, workDir: string): Promise<string> {
-  const config = getDefaultConfig()
+  const config = getDefaultConfig();
 
-  const safeDirs = getSafeDirs()
-  const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:ro"`).join(' ')
+  const safeDirs = getSafeDirs();
+  const volumeMounts = safeDirs.map((d) => `-v "${d}:${d}:ro"`).join(' ');
 
-  const dockerCmd = `docker run --rm ` +
+  const dockerCmd =
+    `docker run --rm ` +
     `--user $(id -u):$(id -g) ` +
     `--group-add $(id -g) ` +
     `--cap-drop ALL ` +
@@ -201,22 +216,23 @@ export async function listDirInSandbox(dirPath: string, workDir: string): Promis
     `--workdir ${workDir} ` +
     `--tmpfs /tmp:rw,noexec,nosuid,size=32m ` +
     `${volumeMounts} ` +
-    `isolated -c 'ls -la "${dirPath}"'`
+    `isolated -c 'ls -la "${dirPath}"'`;
 
   const { stdout } = await execAsync(dockerCmd, {
     timeout: 30000,
-  })
+  });
 
-  return stripAnsi(stdout)
+  return stripAnsi(stdout);
 }
 
 export async function globInSandbox(pattern: string, workDir: string): Promise<string> {
-  const config = getDefaultConfig()
+  const config = getDefaultConfig();
 
-  const safeDirs = getSafeDirs()
-  const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:ro"`).join(' ')
+  const safeDirs = getSafeDirs();
+  const volumeMounts = safeDirs.map((d) => `-v "${d}:${d}:ro"`).join(' ');
 
-  const dockerCmd = `docker run --rm ` +
+  const dockerCmd =
+    `docker run --rm ` +
     `--user $(id -u):$(id -g) ` +
     `--group-add $(id -g) ` +
     `--cap-drop ALL ` +
@@ -229,13 +245,13 @@ export async function globInSandbox(pattern: string, workDir: string): Promise<s
     `--workdir ${workDir} ` +
     `--tmpfs /tmp:rw,noexec,nosuid,size=32m ` +
     `${volumeMounts} ` +
-    `isolated -c 'find . -name "${pattern}" 2>/dev/null | head -100'`
+    `isolated -c 'find . -name "${pattern}" 2>/dev/null | head -100'`;
 
   const { stdout } = await execAsync(dockerCmd, {
     timeout: 30000,
-  })
+  });
 
-  return stripAnsi(stdout)
+  return stripAnsi(stdout);
 }
 
 export async function grepInSandbox(
@@ -244,21 +260,22 @@ export async function grepInSandbox(
   workDir: string,
   options: { include?: string; caseSensitive?: boolean } = {}
 ): Promise<string> {
-  const config = getDefaultConfig()
+  const config = getDefaultConfig();
 
-  const safeDirs = getSafeDirs()
-  const volumeMounts = safeDirs.map(d => `-v "${d}:${d}:ro"`).join(' ')
+  const safeDirs = getSafeDirs();
+  const volumeMounts = safeDirs.map((d) => `-v "${d}:${d}:ro"`).join(' ');
 
-  let grepCmd = 'grep'
+  let grepCmd = 'grep';
   if (!options.caseSensitive) {
-    grepCmd += ' -i'
+    grepCmd += ' -i';
   }
   if (options.include) {
-    grepCmd += ` --include="${options.include}"`
+    grepCmd += ` --include="${options.include}"`;
   }
-  grepCmd += ` -r "${pattern}" "${dirPath}" 2>/dev/null | head -50`
+  grepCmd += ` -r "${pattern}" "${dirPath}" 2>/dev/null | head -50`;
 
-  const dockerCmd = `docker run --rm ` +
+  const dockerCmd =
+    `docker run --rm ` +
     `--user $(id -u):$(id -g) ` +
     `--group-add $(id -g) ` +
     `--cap-drop ALL ` +
@@ -271,11 +288,11 @@ export async function grepInSandbox(
     `--workdir ${workDir} ` +
     `--tmpfs /tmp:rw,noexec,nosuid,size=32m ` +
     `${volumeMounts} ` +
-    `isolated -c '${grepCmd}'`
+    `isolated -c '${grepCmd}'`;
 
   const { stdout } = await execAsync(dockerCmd, {
     timeout: 30000,
-  })
+  });
 
-  return stripAnsi(stdout)
+  return stripAnsi(stdout);
 }

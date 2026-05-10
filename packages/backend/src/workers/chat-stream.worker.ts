@@ -1,24 +1,89 @@
 import { Anthropic } from '@anthropic-ai/sdk';
-import { appendStreamingContent, updateSessionStatus, getSession } from '../stores/session-store.js';
 import { appendMessage } from '../stores/message-store.js';
+import {
+  appendStreamingContent,
+  getSession,
+  updateSessionStatus,
+} from '../stores/session-store.js';
 
-let sessionId: string;
-let messages: any[];
-let options: {
+interface TextBlock {
+  type: 'text';
+  text: string;
+}
+
+interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface ToolResultBlock {
+  type: 'tool_result';
+  id?: string;
+  tool_use_id?: string;
+  content: string | unknown;
+}
+
+type MessageContent = TextBlock | ToolUseBlock | ToolResultBlock;
+
+interface Message {
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string | MessageContent[];
+}
+
+interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+interface WorkerOptions {
   model?: string;
   maxTokens?: number;
   systemPrompt?: string;
   correlationId?: string;
-};
-let tools: any[] = [];
+}
+
+interface InitData {
+  sessionId: string;
+  messages: Message[];
+  options: WorkerOptions;
+  tools: MCPTool[];
+}
+
+interface ToolResultData {
+  result: string | { content?: Array<{ type: string; text?: string }>; text?: string };
+}
+
+interface ToolErrorData {
+  error: string;
+}
+
+type WorkerMessage =
+  | { type: 'init'; data: InitData }
+  | { type: 'tool_result'; data: ToolResultData }
+  | { type: 'tool_error'; data: ToolErrorData }
+  | { type: 'stop' };
+
+let sessionId: string;
+let messages: Message[];
+let options: WorkerOptions;
+let tools: MCPTool[] = [];
 let pendingToolCall: { name: string; input: string; id: string } | null = null;
-let completedToolCalls: { id: string; name: string; input: Record<string, unknown>; output?: unknown; error?: string }[] = [];
+const completedToolCalls: {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  output?: string;
+  error?: string;
+}[] = [];
 let isStopping = false;
-let pendingToolCallsQueue: { name: string; input: string; id: string; inputStr: string }[] = [];
-let currentStreamingContent: string = '';
-let pendingToolInputById: Map<string, string> = new Map();
-let emittedToolNames: Map<string, string> = new Map();
-let emittedToolIds: string[] = [];
+const pendingToolCallsQueue: { name: string; input: string; id: string; inputStr: string }[] = [];
+let currentStreamingContent = '';
+const pendingToolInputById: Map<string, string> = new Map();
+const emittedToolNames: Map<string, string> = new Map();
+const emittedToolIds: string[] = [];
 
 process.on('uncaughtException', (err) => {
   log('ERROR', 'Uncaught exception in worker', { error: String(err), stack: err.stack });
@@ -30,18 +95,31 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-function log(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', message: string, meta?: Record<string, unknown>) {
+function log(
+  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR',
+  message: string,
+  meta?: Record<string, unknown>
+) {
   process.send?.({ type: 'log', data: { level, message, meta: meta || {} } });
 }
 
 function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveFields = ['apiKey', 'token', 'password', 'authorization', 'secret', 'MINIMAX_API_KEY', 'path', 'file_path'];
+  const sensitiveFields = [
+    'apiKey',
+    'token',
+    'password',
+    'authorization',
+    'secret',
+    'MINIMAX_API_KEY',
+    'path',
+    'file_path',
+  ];
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
-    if (sensitiveFields.some(f => key.toLowerCase().includes(f.toLowerCase()))) {
+    if (sensitiveFields.some((f) => key.toLowerCase().includes(f.toLowerCase()))) {
       sanitized[key] = '***';
     } else if (typeof value === 'string' && value.length > 200) {
-      sanitized[key] = value.slice(0, 200) + '...';
+      sanitized[key] = `${value.slice(0, 200)}...`;
     } else {
       sanitized[key] = value;
     }
@@ -49,7 +127,7 @@ function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
   return sanitized;
 }
 
-process.on('message', async (msg: { type: string; data?: any }) => {
+process.on('message', async (msg: WorkerMessage) => {
   if (msg.type === 'init') {
     sessionId = msg.data.sessionId;
     messages = msg.data.messages;
@@ -85,7 +163,9 @@ function finalizeToolCall(content: string) {
     return;
   }
 
-  const toolName = emittedToolNames.get(toolId) || pendingToolCallsQueue.find(q => q.id === toolId)?.name ||
+  const toolName =
+    emittedToolNames.get(toolId) ||
+    pendingToolCallsQueue.find((q) => q.id === toolId)?.name ||
     (pendingToolCall?.id === toolId ? pendingToolCall.name : 'unknown');
   emittedToolNames.delete(toolId);
   const inputStr = pendingToolInputById.get(toolId) || '';
@@ -94,7 +174,7 @@ function finalizeToolCall(content: string) {
   const toolCallRecord = {
     id: toolId,
     name: toolName,
-    input: JSON.parse(inputStr || '{}'),
+    input: JSON.parse(inputStr || '{}') as Record<string, unknown>,
     output: content.startsWith('Error:') ? undefined : content,
     error: content.startsWith('Error:') ? content : undefined,
   };
@@ -108,48 +188,65 @@ function finalizeToolCall(content: string) {
   });
 
   if (currentStreamingContent) {
-    appendMessage(sessionId, 'assistant', [{ type: 'text', text: currentStreamingContent }], undefined, []);
+    appendMessage(
+      sessionId,
+      'assistant',
+      [{ type: 'text', text: currentStreamingContent }],
+      undefined,
+      []
+    );
     currentStreamingContent = '';
   }
 
   messages.push({
     role: 'assistant',
-    content: [{
-      type: 'tool_use',
-      id: toolId,
-      name: toolName,
-      input: JSON.parse(inputStr || '{}'),
-    }],
+    content: [
+      {
+        type: 'tool_use',
+        id: toolId,
+        name: toolName,
+        input: JSON.parse(inputStr || '{}'),
+      },
+    ],
   });
 
   messages.push({
     role: 'user',
-    content: [{
-      type: 'tool_result',
-      tool_use_id: toolId,
-      content,
-    }],
+    content: [
+      {
+        type: 'tool_result',
+        tool_use_id: toolId,
+        content,
+      },
+    ],
   });
 
   makeFollowUpCall();
 }
 
-function handleToolResult(result: any) {
+function handleToolResult(
+  result: string | { content?: Array<{ type: string; text?: string }>; text?: string }
+) {
   let content: string;
   if (typeof result === 'string') {
     content = result;
   } else if (result.content && Array.isArray(result.content)) {
-    content = result.content.map((block: any) => {
-      if (block.type === 'text') return block.text;
-      if (block.type === 'image') return `[Image: ${block.source?.url || 'embedded'}]`;
-      return JSON.stringify(block);
-    }).join('\n');
+    content = result.content
+      .map((block) => {
+        if (block.type === 'text') return block.text || '';
+        if (block.type === 'image') return '[Image]';
+        return JSON.stringify(block);
+      })
+      .join('\n');
   } else if (result.text) {
     content = result.text;
   } else {
     content = JSON.stringify(result);
   }
-  log('DEBUG', 'Handling tool result', { resultLength: content.length, contentPreview: content.slice(0, 200) });
+  log('DEBUG', 'Handling tool result', {
+    resultLength: content.length,
+    contentPreview: content.slice(0, 200),
+  });
   finalizeToolCall(content);
 }
 
@@ -165,7 +262,13 @@ async function handleStop() {
   const streamingContent = session?.streamingContent || '';
 
   if (streamingContent) {
-    await appendMessage(sessionId, 'assistant', [{ type: 'text', text: streamingContent }], undefined, completedToolCalls);
+    await appendMessage(
+      sessionId,
+      'assistant',
+      [{ type: 'text', text: streamingContent }],
+      undefined,
+      completedToolCalls
+    );
   }
   await updateSessionStatus(sessionId, 'idle', null);
   process.send?.({ type: 'done' });
@@ -196,13 +299,14 @@ async function makeApiCall() {
     systemPromptLength: systemPrompt.length,
     systemPromptPreview: systemPrompt.slice(0, 300),
     messageCount: messages.length,
-    messages: messages.map(m => ({
+    messages: messages.map((m) => ({
       role: m.role,
       contentType: typeof m.content === 'string' ? 'text' : 'array',
-      contentLength: typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length,
+      contentLength:
+        typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length,
     })),
     toolCount: tools.length,
-    tools: tools.map(t => ({ name: t.name, description: t.description?.slice(0, 100) })),
+    tools: tools.map((t) => ({ name: t.name, description: t.description?.slice(0, 100) })),
   });
 
   try {
@@ -211,8 +315,8 @@ async function makeApiCall() {
       max_tokens: maxTokens,
       temperature,
       system: systemPrompt,
-      messages,
-      tools,
+      messages: messages as never,
+      tools: tools as never,
     });
 
     log('DEBUG', 'API stream created, starting to process events');
@@ -232,24 +336,33 @@ async function makeApiCall() {
         } else if (event.delta.type === 'input_json_delta') {
           if (pendingToolCall) {
             const current = pendingToolInputById.get(pendingToolCall.id) || '';
-            pendingToolInputById.set(pendingToolCall.id, current + (event.delta as any).partial_json);
+            const delta = event.delta as { type: string; partial_json?: string };
+            pendingToolInputById.set(pendingToolCall.id, current + (delta.partial_json || ''));
           }
         }
       } else if (event.type === 'content_block_start') {
-        if ((event as any).content_block?.type === 'tool_use') {
-          const block = (event as any).content_block;
+        const block = (event as unknown as { content_block?: ToolUseBlock }).content_block;
+        if (block?.type === 'tool_use') {
           if (pendingToolCall || pendingToolCallsQueue.length > 0) {
-            const currentInputStr = pendingToolInputById.get(pendingToolCall?.id || '') || pendingToolCall?.input || '';
-            pendingToolCallsQueue.push({ name: pendingToolCall?.name || '', id: pendingToolCall?.id || '', input: pendingToolCall?.input || '', inputStr: currentInputStr });
-            log('DEBUG', 'Queued pending tool_use block, queue size', { queueSize: pendingToolCallsQueue.length });
+            const currentInputStr =
+              pendingToolInputById.get(pendingToolCall?.id || '') || pendingToolCall?.input || '';
+            pendingToolCallsQueue.push({
+              name: pendingToolCall?.name || '',
+              id: pendingToolCall?.id || '',
+              input: pendingToolCall?.input || '',
+              inputStr: currentInputStr,
+            });
+            log('DEBUG', 'Queued pending tool_use block, queue size', {
+              queueSize: pendingToolCallsQueue.length,
+            });
           }
           pendingToolCall = {
-            name: block?.name,
-            id: block?.id,
+            name: block.name,
+            id: block.id,
             input: '',
           };
-          pendingToolInputById.set(block?.id, '');
-          log('DEBUG', 'Started tool_use block', { toolName: block?.name, toolId: block?.id });
+          pendingToolInputById.set(block.id, '');
+          log('DEBUG', 'Started tool_use block', { toolName: block.name, toolId: block.id });
         }
       } else if (event.type === 'content_block_stop') {
         if (pendingToolCall) {
@@ -263,19 +376,28 @@ async function makeApiCall() {
                 toolId: pendingToolCall.id,
                 args: sanitizedArgs,
               });
-              process.send?.({ type: 'tool_call', data: { tool: pendingToolCall.name, args } });
+              process.send?.({
+                type: 'tool_call',
+                data: { tool: pendingToolCall.name, args },
+              });
               emittedToolIds.push(pendingToolCall.id);
               emittedToolNames.set(pendingToolCall.id, pendingToolCall.name);
               const nextQueued = pendingToolCallsQueue.shift();
               if (nextQueued) {
                 pendingToolCall = { name: nextQueued.name, id: nextQueued.id, input: '' };
                 pendingToolInputById.set(nextQueued.id, nextQueued.inputStr);
-                log('DEBUG', 'Popped next tool from queue', { toolName: pendingToolCall.name, queueSize: pendingToolCallsQueue.length });
+                log('DEBUG', 'Popped next tool from queue', {
+                  toolName: pendingToolCall.name,
+                  queueSize: pendingToolCallsQueue.length,
+                });
               } else {
                 pendingToolCall = null;
               }
             } catch (e) {
-              log('ERROR', 'Failed to parse tool input JSON', { error: String(e), input: inputStr.slice(0, 200) });
+              log('ERROR', 'Failed to parse tool input JSON', {
+                error: String(e),
+                input: inputStr.slice(0, 200),
+              });
             }
           }
         }
@@ -296,7 +418,13 @@ async function makeApiCall() {
       });
 
       if (currentStreamingContent || messages.length > 0) {
-        appendMessage(sessionId, 'assistant', [{ type: 'text', text: currentStreamingContent }], undefined, completedToolCalls);
+        appendMessage(
+          sessionId,
+          'assistant',
+          [{ type: 'text', text: currentStreamingContent }],
+          undefined,
+          completedToolCalls
+        );
       }
       updateSessionStatus(sessionId, 'idle', null);
       process.send?.({ type: 'done' });
@@ -328,13 +456,14 @@ async function makeFollowUpCall() {
     systemPromptLength: systemPrompt.length,
     systemPromptPreview: systemPrompt.slice(0, 300),
     messageCount: messages.length,
-    messages: messages.map(m => ({
+    messages: messages.map((m) => ({
       role: m.role,
       contentType: typeof m.content === 'string' ? 'text' : 'array',
-      contentLength: typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length,
+      contentLength:
+        typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length,
     })),
     toolCount: tools.length,
-    tools: tools.map(t => ({ name: t.name, description: t.description?.slice(0, 100) })),
+    tools: tools.map((t) => ({ name: t.name, description: t.description?.slice(0, 100) })),
   });
 
   try {
@@ -343,8 +472,8 @@ async function makeFollowUpCall() {
       max_tokens: maxTokens,
       temperature,
       system: systemPrompt,
-      messages,
-      tools,
+      messages: messages as never,
+      tools: tools as never,
     });
 
     for await (const event of stream) {
@@ -361,24 +490,36 @@ async function makeFollowUpCall() {
         } else if (event.delta.type === 'input_json_delta') {
           if (pendingToolCall) {
             const current = pendingToolInputById.get(pendingToolCall.id) || '';
-            pendingToolInputById.set(pendingToolCall.id, current + (event.delta as any).partial_json);
+            const delta = event.delta as { type: string; partial_json?: string };
+            pendingToolInputById.set(pendingToolCall.id, current + (delta.partial_json || ''));
           }
         }
       } else if (event.type === 'content_block_start') {
-        if ((event as any).content_block?.type === 'tool_use') {
-          const block = (event as any).content_block;
+        const block = (event as unknown as { content_block?: ToolUseBlock }).content_block;
+        if (block?.type === 'tool_use') {
           if (pendingToolCall || pendingToolCallsQueue.length > 0) {
-            const currentInputStr = pendingToolInputById.get(pendingToolCall?.id || '') || pendingToolCall?.input || '';
-            pendingToolCallsQueue.push({ name: pendingToolCall?.name || '', id: pendingToolCall?.id || '', input: pendingToolCall?.input || '', inputStr: currentInputStr });
-            log('DEBUG', 'Queued pending tool_use block in follow-up, queue size', { queueSize: pendingToolCallsQueue.length });
+            const currentInputStr =
+              pendingToolInputById.get(pendingToolCall?.id || '') || pendingToolCall?.input || '';
+            pendingToolCallsQueue.push({
+              name: pendingToolCall?.name || '',
+              id: pendingToolCall?.id || '',
+              input: pendingToolCall?.input || '',
+              inputStr: currentInputStr,
+            });
+            log('DEBUG', 'Queued pending tool_use block in follow-up, queue size', {
+              queueSize: pendingToolCallsQueue.length,
+            });
           }
           pendingToolCall = {
-            name: block?.name,
-            id: block?.id,
+            name: block.name,
+            id: block.id,
             input: '',
           };
-          pendingToolInputById.set(block?.id, '');
-          log('DEBUG', 'Started tool_use block in follow-up', { toolName: block?.name, toolId: block?.id });
+          pendingToolInputById.set(block.id, '');
+          log('DEBUG', 'Started tool_use block in follow-up', {
+            toolName: block.name,
+            toolId: block.id,
+          });
         }
       } else if (event.type === 'content_block_stop') {
         if (pendingToolCall) {
@@ -392,19 +533,28 @@ async function makeFollowUpCall() {
                 toolId: pendingToolCall.id,
                 args: sanitizedArgs,
               });
-              process.send?.({ type: 'tool_call', data: { tool: pendingToolCall.name, args } });
+              process.send?.({
+                type: 'tool_call',
+                data: { tool: pendingToolCall.name, args },
+              });
               emittedToolIds.push(pendingToolCall.id);
               emittedToolNames.set(pendingToolCall.id, pendingToolCall.name);
               const nextQueued = pendingToolCallsQueue.shift();
               if (nextQueued) {
                 pendingToolCall = { name: nextQueued.name, id: nextQueued.id, input: '' };
                 pendingToolInputById.set(nextQueued.id, nextQueued.inputStr);
-                log('DEBUG', 'Popped next tool from queue in follow-up', { toolName: pendingToolCall.name, queueSize: pendingToolCallsQueue.length });
+                log('DEBUG', 'Popped next tool from queue in follow-up', {
+                  toolName: pendingToolCall.name,
+                  queueSize: pendingToolCallsQueue.length,
+                });
               } else {
                 pendingToolCall = null;
               }
             } catch (e) {
-              log('ERROR', 'Failed to parse tool input JSON in follow-up', { error: String(e), input: inputStr.slice(0, 200) });
+              log('ERROR', 'Failed to parse tool input JSON in follow-up', {
+                error: String(e),
+                input: inputStr.slice(0, 200),
+              });
             }
           }
         }
@@ -421,7 +571,13 @@ async function makeFollowUpCall() {
       fullContentPreview: fullContent.slice(0, 500),
     });
 
-    appendMessage(sessionId, 'assistant', [{ type: 'text', text: fullContent }], undefined, completedToolCalls);
+    appendMessage(
+      sessionId,
+      'assistant',
+      [{ type: 'text', text: fullContent }],
+      undefined,
+      completedToolCalls
+    );
     updateSessionStatus(sessionId, 'idle', null);
     process.send?.({ type: 'done' });
   } catch (err) {

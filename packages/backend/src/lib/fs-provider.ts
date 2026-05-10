@@ -1,16 +1,16 @@
-import fs from 'fs-extra';
 import path from 'node:path';
-import { globby } from 'globby';
 import * as Diff from 'diff';
+import fs from 'fs-extra';
+import { globby } from 'globby';
 import { configManager } from './config-manager.js';
 
 const PROTECTED_PATHS = ['/etc', '/root', '/.ssh', '/proc', '/sys'];
 const DANGEROUS_PATTERNS = [
-  /\/etc[\/\s]/,
-  /\/root[\/\s]/,
-  /\/\.ssh[\/\s]/,
-  /\/proc[\/\s]/,
-  /\/sys[\/\s]/,
+  /\/etc[/\s]/,
+  /\/root[/\s]/,
+  /\/\.ssh[/\s]/,
+  /\/proc[/\s]/,
+  /\/sys[/\s]/,
 ];
 
 function isDangerousPath(p: string): boolean {
@@ -26,7 +26,7 @@ function isWithinWorkspace(p: string): boolean {
   if (workspaceDirs.length === 0) return true;
 
   const normalized = path.resolve(p);
-  return workspaceDirs.some(dir => {
+  return workspaceDirs.some((dir) => {
     const resolvedDir = path.resolve(dir);
     return normalized.startsWith(resolvedDir) || normalized === resolvedDir;
   });
@@ -36,14 +36,15 @@ function expandVariables(command: string): { expanded: string; error?: string } 
   let expanded = command;
 
   const varRegex = /\$\{([^}]+)\}|\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
-  let match;
-  while ((match = varRegex.exec(expanded)) !== null) {
+  let match: RegExpExecArray | null = varRegex.exec(expanded);
+  while (match !== null) {
     const varName = match[1] || match[2];
     const varValue = process.env[varName];
     if (varValue === undefined) {
       return { expanded: command, error: `undefined variable: ${match[0]}` };
     }
     expanded = expanded.replace(match[0], varValue);
+    match = varRegex.exec(expanded);
   }
 
   return { expanded };
@@ -51,12 +52,16 @@ function expandVariables(command: string): { expanded: string; error?: string } 
 
 function extractAbsolutePaths(command: string): string[] {
   const paths: string[] = [];
-  const regex = /\/[^\s\'\"\\|;&$#*?]+/g;
-  let match;
-  while ((match = regex.exec(command)) !== null) {
+  const regex = /\/[^\s'"\\|;&$#*?]+/g;
+  let match: RegExpExecArray | null = regex.exec(command);
+  while (match !== null) {
     const p = match[0];
-    if (p.startsWith('//')) continue;
+    if (p.startsWith('//')) {
+      match = regex.exec(command);
+      continue;
+    }
     paths.push(p);
+    match = regex.exec(command);
   }
   return paths;
 }
@@ -113,11 +118,11 @@ export function validatePath(requestedPath: string): ValidationResult {
   if (config.tools?.fs?.workspaceOnly ?? true) {
     const allowedDirs = config.workspace?.directories ?? [];
     if (allowedDirs.length > 0) {
-      const isWithinWorkspace = allowedDirs.some(dir => {
+      const withinWs = allowedDirs.some((dir) => {
         const resolvedDir = path.resolve(dir);
         return normalized.startsWith(resolvedDir) || normalized === resolvedDir;
       });
-      if (!isWithinWorkspace) {
+      if (!withinWs) {
         return { valid: false, reason: 'Directory does not exist' };
       }
     }
@@ -150,12 +155,16 @@ export const fsProvider = {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
       return { content };
-    } catch (error: any) {
-      return { content: '', error: error.message };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { content: '', error: err.message };
     }
   },
 
-  async write_file(filePath: string, content: string): Promise<{ success: boolean; error?: string }> {
+  async write_file(
+    filePath: string,
+    content: string
+  ): Promise<{ success: boolean; error?: string }> {
     const validation = validatePath(filePath);
     if (!validation.valid) {
       return { success: false, error: validation.reason };
@@ -165,12 +174,17 @@ export const fsProvider = {
       await fs.ensureFile(filePath);
       await fs.writeFile(filePath, content, 'utf-8');
       return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, error: err.message };
     }
   },
 
-  async edit_file(filePath: string, oldString: string, newString: string): Promise<{ success: boolean; error?: string }> {
+  async edit_file(
+    filePath: string,
+    oldString: string,
+    newString: string
+  ): Promise<{ success: boolean; error?: string }> {
     const validation = validatePath(filePath);
     if (!validation.valid) {
       return { success: false, error: validation.reason };
@@ -186,8 +200,9 @@ export const fsProvider = {
       const newContent = content.replace(oldString, newString);
       await fs.writeFile(filePath, newContent, 'utf-8');
       return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, error: err.message };
     }
   },
 
@@ -205,13 +220,18 @@ export const fsProvider = {
     try {
       await fs.remove(filePath);
       return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, error: err.message };
     }
   },
 
-  async search_files(pattern: string, options?: { cwd?: string; content?: boolean }): Promise<{ files: string[]; error?: string }> {
-    const cwd = options?.cwd || configManager.get('workspace.directories')?.[0] || process.cwd();
+  async search_files(
+    pattern: string,
+    options?: { cwd?: string; content?: boolean }
+  ): Promise<{ files: string[]; error?: string }> {
+    const directories = configManager.get<string[]>('workspace.directories');
+    const cwd = options?.cwd || directories?.[0] || process.cwd();
     const validation = validatePath(cwd);
     if (!validation.valid) {
       return { files: [], error: validation.reason };
@@ -224,12 +244,16 @@ export const fsProvider = {
         onlyFiles: true,
       });
       return { files };
-    } catch (error: any) {
-      return { files: [], error: error.message };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { files: [], error: err.message };
     }
   },
 
-  async list_directory(dirPath: string, options?: { recursive?: boolean }): Promise<{ entries: string[]; error?: string }> {
+  async list_directory(
+    dirPath: string,
+    options?: { recursive?: boolean }
+  ): Promise<{ entries: string[]; error?: string }> {
     const validation = validatePath(dirPath);
     if (!validation.valid) {
       return { entries: [], error: validation.reason };
@@ -250,11 +274,12 @@ export const fsProvider = {
         return { entries };
       } else {
         const entries = await fs.readdir(dirPath);
-        const fullPaths = entries.map(e => path.join(dirPath, e));
+        const fullPaths = entries.map((e) => path.join(dirPath, e));
         return { entries: fullPaths };
       }
-    } catch (error: any) {
-      return { entries: [], error: error.message };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { entries: [], error: err.message };
     }
   },
 
@@ -281,8 +306,9 @@ export const fsProvider = {
       );
 
       return { diff };
-    } catch (error: any) {
-      return { diff: '', error: error.message };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { diff: '', error: err.message };
     }
   },
 };

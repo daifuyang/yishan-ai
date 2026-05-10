@@ -1,5 +1,5 @@
-const { createServer } = require('http');
-const { parse } = require('url');
+const { createServer } = require('node:http');
+const { parse } = require('node:url');
 const next = require('next');
 const httpProxy = require('http-proxy');
 
@@ -12,7 +12,7 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-proxy.on('error', (err, req, res) => {
+proxy.on('error', (err, _req, res) => {
   console.error('Proxy error:', err);
   if (res && !res.writableEnded) {
     res.statusCode = 502;
@@ -20,7 +20,7 @@ proxy.on('error', (err, req, res) => {
   }
 });
 
-proxy.on('econnreset', (err, req, res) => {
+proxy.on('econnreset', (err, _req, _res) => {
   console.error('Connection reset:', err);
 });
 
@@ -35,16 +35,18 @@ app.prepare().then(() => {
     } else {
       handle(req, res);
     }
-  }).on('upgrade', (req, socket, head) => {
-    const { pathname } = parse(req.url, true);
-    if (pathname.startsWith('/api/')) {
-      proxy.ws(req, socket, head);
-    }
-  }).listen(4810, (err) => {
-    if (err) {
-      console.error('Failed to start server:', err);
-      process.exit(1);
-    }
-    console.log('> Dev server on http://localhost:4810');
-  });
+  })
+    .on('upgrade', (req, socket, head) => {
+      const { pathname } = parse(req.url, true);
+      if (pathname.startsWith('/api/')) {
+        proxy.ws(req, socket, head);
+      }
+    })
+    .listen(4810, (err) => {
+      if (err) {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+      }
+      console.log('> Dev server on http://localhost:4810');
+    });
 });

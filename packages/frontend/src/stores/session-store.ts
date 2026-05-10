@@ -17,7 +17,9 @@ interface SessionStore {
   sessions: Session[];
   activeId: string | null;
   fetchSessions: () => Promise<void>;
-  createSession: (model: string) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
+  createSession: (
+    model: string
+  ) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
   deleteSession: (id: string) => Promise<{ success: boolean; error?: string }>;
   updateSession: (id: string, data: { title?: string; isPinned?: boolean }) => Promise<void>;
   setActiveId: (id: string | null) => void;
@@ -109,7 +111,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         set({ sessions: previousSessions });
         return;
       }
-    } catch (error) {
+    } catch (_error) {
       set({ sessions: previousSessions });
     }
   },

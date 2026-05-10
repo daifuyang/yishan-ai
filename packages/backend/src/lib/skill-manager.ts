@@ -1,6 +1,6 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 export interface SkillMetadata {
   name: string;
@@ -80,13 +80,13 @@ export class SkillManager {
     }
 
     const entries = fs.readdirSync(this.skillsDir, { withFileTypes: true });
-    
+
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      
+
       const skillPath = path.join(this.skillsDir, entry.name);
       const skillFilePath = path.join(skillPath, 'SKILL.md');
-      
+
       if (!fs.existsSync(skillFilePath)) continue;
 
       try {
@@ -121,13 +121,13 @@ export class SkillManager {
 
   private async scanSkillFiles(skillPath: string): Promise<SkillFile[]> {
     const files: SkillFile[] = [];
-    
+
     const scanDir = (dirPath: string, basePath: string = skillPath) => {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
         const relativePath = path.relative(basePath, fullPath);
-        
+
         if (entry.isDirectory()) {
           scanDir(fullPath, basePath);
         } else {
@@ -145,7 +145,7 @@ export class SkillManager {
 
   parseSkillMetadata(content: string): SkillMetadata {
     const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    
+
     if (!frontmatterMatch) {
       return {
         name: '',
@@ -178,7 +178,9 @@ export class SkillManager {
       const metadata: SkillMetadata['metadata'] = {};
       const binsMatch = frontmatterStr.match(/bins:\s*\[(.*?)\]/);
       if (binsMatch) {
-        metadata.requires = { bins: binsMatch[1].split(',').map(s => s.trim().replace(/["']/g, '')) };
+        metadata.requires = {
+          bins: binsMatch[1].split(',').map((s) => s.trim().replace(/["']/g, '')),
+        };
       }
       const cliHelp = extractValue('cliHelp');
       if (cliHelp) {
@@ -209,7 +211,7 @@ export class SkillManager {
 
   async addSkill(name: string, skillContent: string): Promise<Skill> {
     const skillPath = path.join(this.skillsDir, name);
-    
+
     if (fs.existsSync(skillPath)) {
       throw new Error(`Skill "${name}" already exists`);
     }
@@ -230,7 +232,7 @@ export class SkillManager {
 
   async updateSkill(name: string, skillContent: string): Promise<Skill> {
     const skillPath = path.join(this.skillsDir, name);
-    
+
     if (!fs.existsSync(skillPath)) {
       throw new Error(`Skill "${name}" not found`);
     }
@@ -245,7 +247,7 @@ export class SkillManager {
 
   async removeSkill(name: string): Promise<void> {
     const skillPath = path.join(this.skillsDir, name);
-    
+
     if (!fs.existsSync(skillPath)) {
       throw new Error(`Skill "${name}" not found`);
     }
@@ -273,7 +275,7 @@ export class SkillManager {
     const skill = this.skills.get(name);
     if (!skill) return null;
 
-    const file = skill.files.find(f => f.path === filePath);
+    const file = skill.files.find((f) => f.path === filePath);
     return file?.contents || null;
   }
 
@@ -281,7 +283,7 @@ export class SkillManager {
     if (this.skills.size === 0) {
       await this.scanSkills();
     }
-    return Array.from(this.skills.values()).filter(s => s.enabled);
+    return Array.from(this.skills.values()).filter((s) => s.enabled);
   }
 }
 

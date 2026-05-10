@@ -1,17 +1,12 @@
-"use client";
+'use client';
 
-import React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { MessageCirclePlus, PanelLeft } from "lucide-react";
+import { MessageCirclePlus } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Button } from '@/components/ui/button';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 function LogoIcon() {
   return (
@@ -23,6 +18,7 @@ function LogoIcon() {
       xmlns="http://www.w3.org/2000/svg"
       className="shrink-0"
     >
+      <title>App Logo</title>
       <path
         d="M12 2L2 9L12 16L22 9L12 2Z"
         stroke="#171717"
@@ -55,7 +51,7 @@ export function SidebarHeader() {
   const router = useRouter();
 
   const handleNewChat = () => {
-    router.push("/");
+    router.push('/');
   };
 
   return (

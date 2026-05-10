@@ -1,43 +1,42 @@
-"use client";
+'use client';
 
-import React, { Suspense, useCallback, useState } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-
-import { useSessionStore, Session } from "@/stores/session-store";
-import { DEFAULT_SESSION_LIMIT } from "@/lib/constants";
-import { cn } from "@/lib/utils";
-import { useSidebar } from "@/components/ui/sidebar";
+import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import React, { Suspense, useCallback, useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuItemIcon,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { useSidebar } from '@/components/ui/sidebar';
+import { DEFAULT_SESSION_LIMIT } from '@/lib/constants';
+import { cn } from '@/lib/utils';
+import { type Session, useSessionStore } from '@/stores/session-store';
 
 function SessionItem({ session }: { session: Session }) {
   const searchParams = useSearchParams();
-  const isActive = searchParams.get("sessionId") === session.id;
+  const isActive = searchParams.get('sessionId') === session.id;
   const { updateSession, deleteSession } = useSessionStore();
   const { setOpenMobile } = useSidebar();
 
@@ -76,11 +75,13 @@ function SessionItem({ session }: { session: Session }) {
 
   return (
     <>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: hover state needed for dropdown menu visibility */}
       <div
         className={cn(
-          "session-item flex items-center gap-1 px-3 py-2 rounded-md transition-all",
-          !isActive && "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-foreground",
-          isActive && "bg-black text-white font-medium"
+          'session-item flex items-center gap-1 px-3 py-2 rounded-md transition-all',
+          !isActive &&
+            'text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-foreground',
+          isActive && 'bg-black text-white font-medium'
         )}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -90,7 +91,7 @@ function SessionItem({ session }: { session: Session }) {
           className="flex-1 truncate text-sm"
           onClick={() => setOpenMobile(false)}
         >
-          {session.title || "新对话"}
+          {session.title || '新对话'}
         </Link>
 
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -100,23 +101,33 @@ function SessionItem({ session }: { session: Session }) {
               size="icon"
               style={{ opacity: hovered || menuOpen ? 1 : 0 }}
               className={cn(
-                "h-6 w-6 transition-opacity bg-transparent",
+                'h-6 w-6 transition-opacity bg-transparent',
                 isActive
-                  ? "text-white hover:bg-transparent hover:text-white"
-                  : "text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  ? 'text-white hover:bg-transparent hover:text-white'
+                  : 'text-muted-foreground hover:bg-transparent hover:text-foreground'
               )}
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenEdit(); }}>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                handleOpenEdit();
+              }}
+            >
               <DropdownMenuItemIcon>
                 <Pencil className="h-4 w-4 text-muted-foreground" />
               </DropdownMenuItemIcon>
               编辑标题
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleTogglePin(); }}>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                handleTogglePin();
+              }}
+            >
               <DropdownMenuItemIcon>
                 {session.isPinned ? (
                   <PinOff className="h-4 w-4 text-muted-foreground" />
@@ -124,10 +135,13 @@ function SessionItem({ session }: { session: Session }) {
                   <Pin className="h-4 w-4 text-muted-foreground" />
                 )}
               </DropdownMenuItemIcon>
-              {session.isPinned ? "取消置顶" : "置顶"}
+              {session.isPinned ? '取消置顶' : '置顶'}
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={(e) => { e.preventDefault(); handleOpenDelete(); }}
+              onSelect={(e) => {
+                e.preventDefault();
+                handleOpenDelete();
+              }}
               className="text-red-600 focus:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
             >
               <DropdownMenuItemIcon>
@@ -147,11 +161,13 @@ function SessionItem({ session }: { session: Session }) {
           <Input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSaveTitle()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
             autoFocus
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>取消</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              取消
+            </Button>
             <Button onClick={handleSaveTitle}>保存</Button>
           </DialogFooter>
         </DialogContent>
@@ -160,15 +176,10 @@ function SessionItem({ session }: { session: Session }) {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogTitle>确认删除</AlertDialogTitle>
-          <AlertDialogDescription>
-            删除后无法恢复，确定要删除这个会话吗？
-          </AlertDialogDescription>
+          <AlertDialogDescription>删除后无法恢复，确定要删除这个会话吗？</AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-600 hover:bg-red-700"
-            >
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               删除
             </AlertDialogAction>
           </AlertDialogFooter>

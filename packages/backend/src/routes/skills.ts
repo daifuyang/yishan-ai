@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { getSkillManager } from '../lib/skill-manager.js';
 
 const skillRoutes: FastifyPluginAsync = async (fastify) => {
@@ -8,14 +8,14 @@ const skillRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/api/skills', async () => {
     const skills = await skillManager.scanSkills();
-    return skills.map(skill => ({
+    return skills.map((skill) => ({
       name: skill.name,
       version: skill.metadata.version,
       description: skill.metadata.description,
       metadata: skill.metadata.metadata,
       enabled: skill.enabled,
       path: skill.path,
-      files: skill.files.map(f => ({ path: f.path })),
+      files: skill.files.map((f) => ({ path: f.path })),
     }));
   });
 
@@ -24,7 +24,7 @@ const skillRoutes: FastifyPluginAsync = async (fastify) => {
     if (!name || !content) {
       throw new Error('name and content are required');
     }
-    
+
     if (!/^[a-z0-9-]+$/.test(name)) {
       throw new Error('name must be lowercase letters, numbers, and hyphens only');
     }

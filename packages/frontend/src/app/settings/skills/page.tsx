@@ -1,20 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Pencil, FileText } from 'lucide-react';
-import { useSkillStore, Skill } from '@/stores/skill-store';
+import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { type Skill, useSkillStore } from '@/stores/skill-store';
 
 export default function SkillsSettingsPage() {
   return (
@@ -25,7 +25,8 @@ export default function SkillsSettingsPage() {
 }
 
 function SkillList() {
-  const { skills, fetchSkills, addSkill, updateSkill, removeSkill, enableSkill, disableSkill } = useSkillStore();
+  const { skills, fetchSkills, addSkill, updateSkill, removeSkill, enableSkill, disableSkill } =
+    useSkillStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
@@ -108,9 +109,7 @@ ${skillContent}`;
     <div className="flex flex-col h-full p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 shrink-0">
-        <h3 className="font-medium">
-          已安装的 Skills ({skills.length})
-        </h3>
+        <h3 className="font-medium">已安装的 Skills ({skills.length})</h3>
         <Button size="sm" onClick={openAddDialog}>
           <Plus className="h-4 w-4 mr-1" />
           添加 Skill
@@ -175,22 +174,23 @@ ${skillContent}`;
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>
-              {dialogMode === 'add' ? '添加 Skill' : '编辑 Skill'}
-            </DialogTitle>
+            <DialogTitle>{dialogMode === 'add' ? '添加 Skill' : '编辑 Skill'}</DialogTitle>
             <DialogDescription>
-              {dialogMode === 'add'
-                ? '填写技能信息创建新的 Skill'
-                : '编辑 Skill 内容'}
+              {dialogMode === 'add' ? '填写技能信息创建新的 Skill' : '编辑 Skill 内容'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">技能名称</label>
+              <label htmlFor="skill-name" className="text-sm font-medium">
+                技能名称
+              </label>
               <Input
+                id="skill-name"
                 value={skillName}
-                onChange={(e) => setSkillName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                onChange={(e) =>
+                  setSkillName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))
+                }
                 placeholder="my-skill"
                 disabled={dialogMode === 'edit'}
                 className="font-mono"
@@ -198,8 +198,11 @@ ${skillContent}`;
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">描述</label>
+              <label htmlFor="skill-description" className="text-sm font-medium">
+                描述
+              </label>
               <Input
+                id="skill-description"
                 value={skillDescription}
                 onChange={(e) => setSkillDescription(e.target.value)}
                 placeholder="这个 Skill 的功能和使用场景..."
@@ -207,8 +210,11 @@ ${skillContent}`;
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">指令</label>
+              <label htmlFor="skill-content" className="text-sm font-medium">
+                指令
+              </label>
               <Textarea
+                id="skill-content"
                 value={skillContent}
                 onChange={(e) => setSkillContent(e.target.value)}
                 placeholder={`## 使用场景
@@ -251,7 +257,10 @@ ${skillContent}`;
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               取消
             </Button>
-            <Button variant="destructive" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+            >
               删除
             </Button>
           </DialogFooter>

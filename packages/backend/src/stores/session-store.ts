@@ -1,9 +1,14 @@
-import { prisma } from '../lib/stream-processor.js';
 import { getLogger } from '../lib/logger.js';
+import { prisma } from '../lib/stream-processor.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-function storeLog(sessionId: string | null, level: 'DEBUG' | 'INFO', message: string, meta?: Record<string, unknown>) {
+function storeLog(
+  sessionId: string | null,
+  level: 'DEBUG' | 'INFO',
+  message: string,
+  meta?: Record<string, unknown>
+) {
   if (!isDev) return;
   if (sessionId) {
     const log = getLogger(sessionId);
@@ -29,12 +34,22 @@ export interface Session {
   messageCount?: number;
 }
 
-function toSession(s: any): Session {
+function toSession(s: {
+  id: string;
+  title: string;
+  model: string;
+  status: string;
+  streamingContent?: string | null;
+  isPinned: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  _count?: { messages: number };
+}): Session {
   return {
     id: s.id,
     title: s.title,
     model: s.model,
-    status: s.status,
+    status: s.status as Session['status'],
     streamingContent: s.streamingContent ?? undefined,
     isPinned: s.isPinned,
     createdAt: s.createdAt.getTime(),
@@ -99,7 +114,10 @@ export async function updateSessionStatus(
     where: { id },
     data: { status, streamingContent },
   });
-  storeLog(id, 'DEBUG', 'Session status updated', { status, streamingContentLength: streamingContent?.length });
+  storeLog(id, 'DEBUG', 'Session status updated', {
+    status,
+    streamingContentLength: streamingContent?.length,
+  });
 }
 
 export async function appendStreamingContent(id: string, chunk: string): Promise<void> {

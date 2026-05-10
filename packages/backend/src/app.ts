@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { join, dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import AutoLoad, { AutoloadPluginOptions } from '@fastify/autoload';
-import { FastifyPluginAsync, FastifyServerOptions } from 'fastify';
+import AutoLoad, { type AutoloadPluginOptions } from '@fastify/autoload';
+import type { FastifyPluginAsync, FastifyServerOptions } from 'fastify';
 import { prisma } from './lib/stream-processor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,7 +26,9 @@ const app: FastifyPluginAsync<AppOptions> = async (fastify, opts): Promise<void>
   });
 
   if (streamingSessions.length > 0) {
-    fastify.log.warn(`Found ${streamingSessions.length} streaming sessions on startup, marking as failed`);
+    fastify.log.warn(
+      `Found ${streamingSessions.length} streaming sessions on startup, marking as failed`
+    );
     await prisma.session.updateMany({
       where: { status: 'streaming' },
       data: { status: 'failed' },

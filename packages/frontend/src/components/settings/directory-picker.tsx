@@ -1,9 +1,7 @@
 'use client';
 
+import { AlertCircle, Check, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { FolderOpen, Plus, Trash2, Check, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +12,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface DirectoryPickerProps {
   directories: string[];
@@ -21,17 +21,7 @@ interface DirectoryPickerProps {
   allowDelete?: boolean;
 }
 
-interface ValidationState {
-  valid: boolean;
-  reason?: string;
-  withinWorkspace?: boolean;
-  isProtected?: boolean;
-}
-
-export function DirectoryPicker({
-  directories,
-  onChange,
-}: DirectoryPickerProps) {
+export function DirectoryPicker({ directories, onChange }: DirectoryPickerProps) {
   const [input, setInput] = useState('');
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -44,7 +34,9 @@ export function DirectoryPicker({
     setValidationError(null);
 
     try {
-      const response = await fetch(`/api/config/workspace/validate?path=${encodeURIComponent(input.trim())}`);
+      const response = await fetch(
+        `/api/config/workspace/validate?path=${encodeURIComponent(input.trim())}`
+      );
       const result = await response.json();
 
       if (result.valid) {
@@ -68,7 +60,7 @@ export function DirectoryPicker({
         }
         setValidationError(errorMsg);
       }
-    } catch (error) {
+    } catch (_error) {
       setValidationError('验证请求失败');
     } finally {
       setValidating(false);
@@ -76,7 +68,7 @@ export function DirectoryPicker({
   };
 
   const handleRemove = (path: string) => {
-    onChange(directories.filter(d => d !== path));
+    onChange(directories.filter((d) => d !== path));
     setDeleteConfirm(null);
   };
 
@@ -125,13 +117,9 @@ export function DirectoryPicker({
       )}
 
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">
-          已添加目录 ({directories.length}):
-        </p>
+        <p className="text-sm text-muted-foreground">已添加目录 ({directories.length}):</p>
         {directories.length === 0 ? (
-          <div className="text-sm text-muted-foreground italic py-2">
-            暂无已添加的目录
-          </div>
+          <div className="text-sm text-muted-foreground italic py-2">暂无已添加的目录</div>
         ) : (
           <div className="space-y-1">
             {directories.map((dir) => (
