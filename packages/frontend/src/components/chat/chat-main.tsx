@@ -13,7 +13,6 @@ interface ChatMainProps {
   showScrollButton: boolean;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   messages: React.ReactNode;
-  input: React.ReactNode;
 }
 
 export function ChatMain({
@@ -23,7 +22,6 @@ export function ChatMain({
   showScrollButton,
   scrollToBottom,
   messages,
-  input,
 }: ChatMainProps) {
   if (shouldShowLoading) {
     return (
@@ -34,35 +32,38 @@ export function ChatMain({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1">
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth relative min-h-0"
+        className="flex flex-1 overflow-y-auto scrollbar-thin scroll-smooth min-h-0"
       >
         <div className={hasMessages ? 'flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-4' : 'hidden'}>
           {messages}
         </div>
-        <div className={hasMessages ? 'hidden' : 'flex flex-col items-center justify-center h-full px-4 py-8'}>
-          <EmptyState />
-        </div>
-      </div>
-      <div className="shrink-0">
-        {showScrollButton && (
-          <div className="flex justify-center pb-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => scrollToBottom('smooth')}
-              className="h-9 w-9 rounded-full bg-background/95 backdrop-blur shadow-md border-muted-foreground/20"
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
-          </div>
+        {!hasMessages && (
+          <>
+            <div className="flex md:hidden flex-col items-center justify-start px-4 pb-8 pt-[50%] w-full">
+              <EmptyState />
+            </div>
+            <div className="hidden md:flex md:flex-col md:flex-1 md:items-center md:justify-center md:px-6 md:pt-0 md:max-w-3xl md:mx-auto">
+              <EmptyState />
+            </div>
+          </>
         )}
-        <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <div className="max-w-3xl mx-auto p-4">{input}</div>
-        </div>
       </div>
+
+      {showScrollButton && (
+        <div className="fixed left-0 right-0 z-40 flex justify-center md:hidden" style={{ bottom: '160px' }}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => scrollToBottom('smooth')}
+            className="h-9 w-9 rounded-full bg-background/95 backdrop-blur shadow-md border-muted-foreground/20"
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

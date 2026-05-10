@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { apiUrl } from '@/lib/api-base';
 import { sseManager, type SSEHandlerConfig } from '@/lib/sse-manager';
-import deepEqual from 'fast-deep-equal';
 import type { ToolCall, Message, ContentBlock, RawAPIMessage, RawContentBlock, ActiveStream } from '@/types';
+
+let _msgSeq = 0;
+const msgId = () => `msg-${++_msgSeq}`;
 
 const MESSAGES_KEY = 'yishan-messages';
 
@@ -91,7 +93,7 @@ function createToolCallHandler(): SSEHandlerConfig {
     onToolCall: (data) => {
       const toolUseBlock: ContentBlock = {
         type: 'tool_use',
-        id: crypto.randomUUID(),
+        id: msgId(),
         name: data.data.tool,
         input: { ...(data.data.args || {}), description: data.data.description },
       };
@@ -101,10 +103,6 @@ function createToolCallHandler(): SSEHandlerConfig {
         const assistantMsg = state.messages.find((msg) => msg.id === assistantId);
         if (!assistantMsg) return {};
         const existingContent = Array.isArray(assistantMsg.content) ? assistantMsg.content : [];
-        const existingToolUse = existingContent.find(
-          (c: ContentBlock) => c.type === 'tool_use' && c.name === toolUseBlock.name && deepEqual(c.input, toolUseBlock.input)
-        );
-        if (existingToolUse) return {};
         const updatedContent: ContentBlock[] = [...existingContent, toolUseBlock];
         return {
           messages: state.messages.map((msg) =>
@@ -279,7 +277,7 @@ export const useChatStore = create<ChatStore>()(
                 const toolResult = toolResultsMap.get(c.id || '');
                 toolCalls = toolCalls || [];
                 toolCalls.push({
-                  id: c.id || crypto.randomUUID(),
+                  id: c.id || msgId(),
                   name: c.name || 'unknown',
                   input: c.input || {},
                   output: toolResult?.result,
@@ -365,8 +363,8 @@ export const useChatStore = create<ChatStore>()(
   },
 
   sendMessage: async (sessionId, content, model, mode) => {
-    const userTempId = crypto.randomUUID();
-    const assistantTempId = crypto.randomUUID();
+    const userTempId = msgId();
+    const assistantTempId = msgId();
     set((state) => ({
       isStreaming: true,
       streamingContent: '',
@@ -442,7 +440,7 @@ export const useChatStore = create<ChatStore>()(
     }
 
     const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-    const assistantTempId = crypto.randomUUID();
+    const assistantTempId = msgId();
 
     set((state) => ({
       messages: [

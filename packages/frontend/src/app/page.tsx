@@ -145,7 +145,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   const shouldShowLoading = isFetchingMessages && !messages.length;
 
   return (
-    <div className="flex flex-col" style={{ height: '100vh' }}>
+    <div className="flex h-full min-h-0 flex-col">
       <ChatHeader
         title={session?.title || "新对话"}
         onDelete={activeId ? () => handleDeleteSession(activeId) : undefined}
@@ -165,17 +165,22 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
             onRetry={handleRetry}
           />
         }
-        input={
-          <ChatInputWrapper
-            onSend={handleSend}
-            onStop={handleStop}
-            isStreaming={isStreaming}
-            disabled={isStreaming}
-            defaultModel={session?.model}
-            showPadding={false}
-          />
-        }
       />
+
+      <div className="shrink-0">
+        <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:p-4">
+          <div className="max-w-3xl mx-auto p-4 pb-[calc(16px+env(safe-area-inset-bottom))] md:pb-[calc(16px+env(safe-area-inset-bottom))]">
+            <ChatInputWrapper
+              onSend={handleSend}
+              onStop={handleStop}
+              isStreaming={isStreaming}
+              disabled={isStreaming}
+              defaultModel={session?.model}
+              showPadding={false}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -191,7 +196,7 @@ export default function HomePage() {
     <ChatLayout>
       <Suspense
         fallback={
-          <div className="flex items-center justify-center h-dvh">
+          <div className="flex h-full items-center justify-center">
             <LoadingSpinner />
           </div>
         }

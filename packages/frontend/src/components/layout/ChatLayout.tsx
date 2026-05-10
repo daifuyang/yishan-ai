@@ -17,7 +17,7 @@ export function ChatLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
       </Sidebar>
       {/* 内容区域 */}
-      <SidebarInset className="">
+      <SidebarInset style={{ padding: 'env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)' }}>
         {children}
       </SidebarInset>
       <SidebarRail />
