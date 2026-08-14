@@ -1,6 +1,6 @@
 'use client';
 
-import { SendHorizonal, Square } from 'lucide-react';
+import { ArrowUp, Square } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,17 +12,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { ChatMode } from '@/lib/constants';
+import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector';
+import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/config-store';
 
 interface ChatInputProps {
-  onSend: (content: string, model: string, mode: ChatMode) => void;
+  onSend: (content: string, model: string) => void;
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
   defaultModel?: string;
   noBorder?: boolean;
   initialContent?: string;
+  cwd?: string;
+  onCwdChange?: (cwd: string) => void;
 }
 
 export function ChatInput({
@@ -33,13 +36,14 @@ export function ChatInput({
   defaultModel,
   noBorder,
   initialContent,
+  cwd,
+  onCwdChange,
 }: ChatInputProps) {
   const { models, fetchConfig } = useConfigStore();
   const [content, setContent] = useState(initialContent || '');
   const [model, setModel] = useState(
     () => defaultModel || models.defaultModel || 'MiniMax-M2.7-highspeed'
   );
-  const [mode, setMode] = useState<ChatMode>('build');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -79,13 +83,13 @@ export function ChatInput({
     if (!content.trim() || disabled || isStreaming || model === 'no-model') return;
     const currentContent = content;
     try {
-      await onSend(currentContent, model, mode);
+      await onSend(currentContent, model);
     } catch (_error) {
       return;
     }
     setContent('');
     adjustHeight();
-  }, [content, model, mode, disabled, isStreaming, onSend, adjustHeight]);
+  }, [content, model, disabled, isStreaming, onSend, adjustHeight]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -115,15 +119,11 @@ export function ChatInput({
         className="w-full border-0 shadow-none focus-visible:ring-0 resize-none mt-1 mb-3 text-[15px] bg-transparent chat-input-textarea"
       />
       <div className="flex flex-nowrap items-center gap-2 sm:gap-3 px-2 sm:px-3 pb-2 sm:pb-3">
-        <Select value={mode} onValueChange={(v) => setMode(v as ChatMode)} disabled={isDisabled}>
-          <SelectTrigger className="w-[60px] sm:w-[80px] h-8 text-sm border-muted-foreground/20 px-1">
-            <SelectValue placeholder="模式" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="plan">Plan</SelectItem>
-            <SelectItem value="build">Build</SelectItem>
-          </SelectContent>
-        </Select>
+        {onCwdChange && (
+          <WorkspaceSelector value={cwd || ''} onChange={onCwdChange} disabled={isDisabled} />
+        )}
+
+        <div className="flex-1 shrink-0" />
 
         <Select value={model} onValueChange={setModel} disabled={isDisabled}>
           <SelectTrigger className="w-[120px] sm:w-auto h-8 text-sm border-muted-foreground/20 truncate pr-6">
@@ -138,21 +138,25 @@ export function ChatInput({
           </SelectContent>
         </Select>
 
-        <div className="flex-1 shrink-0" />
-
         {isStreaming ? (
           <Button variant="outline" onClick={onStop} className="h-8 px-2 sm:px-3 gap-1 shrink-0">
             <Square className="w-3 h-3" />
             <span className="hidden sm:inline">停止</span>
           </Button>
         ) : (
-          <Button
+          <button
+            type="button"
             onClick={handleSend}
             disabled={!content.trim() || isDisabled || model === 'no-model'}
-            className="h-8 px-2 sm:px-3 gap-1 shrink-0"
+            className={cn(
+              'h-8 w-8 rounded-full flex items-center justify-center transition-colors duration-150 shrink-0',
+              content.trim() && !isDisabled && model !== 'no-model'
+                ? 'bg-foreground text-background hover:bg-foreground/90'
+                : 'bg-muted text-muted-foreground cursor-not-allowed'
+            )}
           >
-            <SendHorizonal className="w-4 h-4" />
-          </Button>
+            <ArrowUp className="w-4 h-4" />
+          </button>
         )}
       </div>
     </div>

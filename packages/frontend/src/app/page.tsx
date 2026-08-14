@@ -6,6 +6,7 @@ import { ChatHeader } from '@/components/chat/chat-header';
 import { ChatInputWrapper } from '@/components/chat/chat-input-wrapper';
 import { ChatMain } from '@/components/chat/chat-main';
 import { MessageList } from '@/components/chat/message-list';
+import { NewConversationView } from '@/components/chat/new-conversation-view';
 import { ChatLayout } from '@/components/layout/ChatLayout';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useChatScroll } from '@/hooks/use-chat-scroll';
@@ -14,7 +15,8 @@ import { useSessionStore } from '@/stores/session-store';
 
 function ChatContent({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
-  const { sessions, activeId, createSession, deleteSession, setActiveId } = useSessionStore();
+  const { sessions, activeId, createSession, deleteSession, updateSession, setActiveId } =
+    useSessionStore();
   const {
     messages,
     isStreaming,
@@ -30,6 +32,7 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
 
   const session = sessions.find((s) => s.id === activeId);
   const prevSessionIdRef = React.useRef<string | null>(null);
+  const [pendingCwd, setPendingCwd] = React.useState('');
 
   const { containerRef, showScrollButton, scrollToBottom } = useChatScroll({
     messagesLength: messages.length,
@@ -63,8 +66,8 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
           const pendingData = sessionStorage.getItem(pendingKey);
           if (pendingData) {
             sessionStorage.removeItem(pendingKey);
-            const { content, model, mode } = JSON.parse(pendingData);
-            sendMessage(sessionId, content, model, mode);
+            const { content, model } = JSON.parse(pendingData);
+            sendMessage(sessionId, content, model);
           }
         }
       })
@@ -82,9 +85,9 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
   }, [sessionId, setActiveId, fetchMessages, scrollToBottom, clearMessages, router, sendMessage]);
 
   const handleSend = useCallback(
-    async (content: string, model: string, mode: 'plan' | 'build') => {
+    async (content: string, model: string) => {
       if (!activeId) {
-        const createResult = await createSession(model);
+        const createResult = await createSession(model, pendingCwd || undefined);
 
         if (!createResult.success || !createResult.sessionId) {
           return;
@@ -93,21 +96,21 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
         const newSessionId = createResult.sessionId;
         sessionStorage.setItem(
           `pending_message_${newSessionId}`,
-          JSON.stringify({ content, model, mode })
+          JSON.stringify({ content, model })
         );
 
         router.push(`/?sessionId=${newSessionId}`);
       } else {
-        sendMessage(activeId, content, model, mode);
+        sendMessage(activeId, content, model);
       }
     },
-    [activeId, createSession, sendMessage, router]
+    [activeId, createSession, sendMessage, router, pendingCwd]
   );
 
   const handleRetry = useCallback(
-    async (messageId: string, model: string, mode: 'plan' | 'build') => {
+    async (messageId: string, model: string) => {
       if (!activeId) return;
-      retryMessage(activeId, messageId, model, mode);
+      retryMessage(activeId, messageId, model);
     },
     [activeId, retryMessage]
   );
@@ -135,42 +138,70 @@ function ChatContent({ sessionId }: { sessionId: string | null }) {
     [deleteSession, clearMessages, router]
   );
 
+  const handleCwdChange = useCallback(
+    (cwd: string) => {
+      if (activeId) {
+        updateSession(activeId, { cwd });
+      } else {
+        setPendingCwd(cwd);
+      }
+    },
+    [activeId, updateSession]
+  );
+
   const hasMessages = messages.length > 0 || isStreaming;
   const shouldShowLoading = isFetchingMessages && !messages.length;
+  const isNewConversation = !hasMessages && !activeId && !shouldShowLoading;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ChatHeader
-        title={session?.title || '新对话'}
-        onDelete={activeId ? () => handleDeleteSession(activeId) : undefined}
-        onTitleClick={() => router.push('/')}
-      />
+      {isNewConversation ? (
+        <NewConversationView
+          onSend={handleSend}
+          onStop={handleStop}
+          isStreaming={isStreaming}
+          disabled={isStreaming}
+          defaultModel={session?.model}
+          cwd={pendingCwd}
+          onCwdChange={handleCwdChange}
+        />
+      ) : (
+        <>
+          <ChatHeader
+            title={session?.title || '新对话'}
+            onDelete={activeId ? () => handleDeleteSession(activeId) : undefined}
+            onTitleClick={() => router.push('/')}
+          />
 
-      <ChatMain
-        hasMessages={hasMessages}
-        shouldShowLoading={shouldShowLoading}
-        containerRef={containerRef}
-        showScrollButton={showScrollButton}
-        scrollToBottom={scrollToBottom}
-        messages={
-          <MessageList messages={messages} onRollback={handleRollback} onRetry={handleRetry} />
-        }
-      />
+          <ChatMain
+            hasMessages={hasMessages}
+            shouldShowLoading={shouldShowLoading}
+            containerRef={containerRef}
+            showScrollButton={showScrollButton}
+            scrollToBottom={scrollToBottom}
+            messages={
+              <MessageList messages={messages} onRollback={handleRollback} onRetry={handleRetry} />
+            }
+          />
 
-      <div className="shrink-0">
-        <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:p-4">
-          <div className="max-w-3xl mx-auto p-4 pb-[calc(16px+env(safe-area-inset-bottom))] md:pb-[calc(16px+env(safe-area-inset-bottom))]">
-            <ChatInputWrapper
-              onSend={handleSend}
-              onStop={handleStop}
-              isStreaming={isStreaming}
-              disabled={isStreaming}
-              defaultModel={session?.model}
-              showPadding={false}
-            />
+          <div className="shrink-0">
+            <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:p-4">
+              <div className="max-w-3xl mx-auto p-4 pb-[calc(16px+env(safe-area-inset-bottom))] md:pb-[calc(16px+env(safe-area-inset-bottom))]">
+                <ChatInputWrapper
+                  onSend={handleSend}
+                  onStop={handleStop}
+                  isStreaming={isStreaming}
+                  disabled={isStreaming}
+                  defaultModel={session?.model}
+                  showPadding={false}
+                  cwd={session?.cwd ?? pendingCwd}
+                  onCwdChange={handleCwdChange}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

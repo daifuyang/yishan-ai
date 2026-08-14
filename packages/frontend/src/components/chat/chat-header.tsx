@@ -22,9 +22,9 @@ export function ChatHeader({ title, onDelete, onTitleClick }: ChatHeaderProps) {
   };
 
   return (
-    <div className="z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
+    <div className="z-10 border-b shrink-0">
       <div className="flex items-center h-14 pl-4 pr-4 sm:pl-6 sm:pr-6">
-        <div className="shrink-0 -ms-1">
+        <div className="shrink-0 -ms-1 md:hidden">
           <Button variant="ghost" size="icon" className="h-9 w-9 ps-0" onClick={handleToggle}>
             <Menu className="h-5 w-5" />
           </Button>
