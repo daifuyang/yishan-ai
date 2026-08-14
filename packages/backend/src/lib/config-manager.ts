@@ -18,13 +18,18 @@ export interface WorkspaceConfig {
   allowDelete: boolean;
 }
 
+export interface SandboxConfig {
+  defaultMode: 'read-only' | 'workspace-write' | 'full-access';
+}
+
+export interface ApprovalConfig {
+  defaultPolicy: 'auto-allow' | 'ask' | 'deny';
+}
+
 export interface ToolsConfig {
   fs: {
     enabled: boolean;
     workspaceOnly: boolean;
-  };
-  exec: {
-    security: 'allow' | 'ask' | 'deny';
   };
 }
 
@@ -54,6 +59,8 @@ export interface ConfigSchema {
     models: ModelConfig[];
   };
   workspace: WorkspaceConfig;
+  sandbox: SandboxConfig;
+  approval: ApprovalConfig;
   tools: ToolsConfig;
   logging: LoggingConfig;
   data: DataConfig;
@@ -84,13 +91,16 @@ const DEFAULT_CONFIG: ConfigSchema = {
     directories: [path.join(os.homedir(), 'yishan-workspace')],
     allowDelete: false,
   },
+  sandbox: {
+    defaultMode: 'workspace-write',
+  },
+  approval: {
+    defaultPolicy: 'auto-allow',
+  },
   tools: {
     fs: {
       enabled: true,
       workspaceOnly: true,
-    },
-    exec: {
-      security: 'ask',
     },
   },
   logging: {
@@ -140,9 +150,10 @@ class ConfigManager {
         models: loaded.models?.models || DEFAULT_CONFIG.models.models,
       },
       workspace: { ...DEFAULT_CONFIG.workspace, ...loaded.workspace },
+      sandbox: { ...DEFAULT_CONFIG.sandbox, ...loaded.sandbox },
+      approval: { ...DEFAULT_CONFIG.approval, ...loaded.approval },
       tools: {
         fs: { ...DEFAULT_CONFIG.tools.fs, ...loaded.tools?.fs },
-        exec: { ...DEFAULT_CONFIG.tools.exec, ...loaded.tools?.exec },
       },
       logging: { ...DEFAULT_CONFIG.logging, ...loaded.logging },
       data: { ...DEFAULT_CONFIG.data, ...loaded.data },

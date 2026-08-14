@@ -1,5 +1,5 @@
 import { createTask, listTasks, updateTask } from './task-store.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import type { Tool, ToolContext } from './types.js';
 
 interface TaskArgs {
   action: 'create' | 'update' | 'complete' | 'list';
@@ -41,7 +41,7 @@ export function createTaskTool(): Tool {
       },
       required: ['action'],
     },
-    async execute(args: unknown, _ctx: ToolContext): Promise<ExecuteResult> {
+    async execute(args: unknown, _ctx: ToolContext): Promise<string> {
       const { action, id, description, status, result } = args as TaskArgs;
 
       switch (action) {
@@ -50,11 +50,7 @@ export function createTaskTool(): Tool {
             throw new Error('description is required for create action');
           }
           const task = createTask(description);
-          return {
-            title: 'Task Created',
-            output: `Created task "${description}" with ID: ${task.id}`,
-            metadata: { id: task.id, action: 'create' },
-          };
+          return `Created task "${description}" with ID: ${task.id}`;
         }
 
         case 'update': {
@@ -63,13 +59,9 @@ export function createTaskTool(): Tool {
           }
           const task = updateTask(id, { description, status, result });
           if (!task) {
-            throw new Error(`Task not found: ${id}`);
+            throw new Error(`Task not found: $046003573393_AWS_us-east-1`);
           }
-          return {
-            title: 'Task Updated',
-            output: `Updated task ${id}: ${task.description} [${task.status}]`,
-            metadata: { id, action: 'update' },
-          };
+          return `Updated task $046003573393_AWS_us-east-1: ${task.description} [${task.status}]`;
         }
 
         case 'complete': {
@@ -78,33 +70,21 @@ export function createTaskTool(): Tool {
           }
           const task = updateTask(id, { status: 'completed', result });
           if (!task) {
-            throw new Error(`Task not found: ${id}`);
+            throw new Error(`Task not found: $046003573393_AWS_us-east-1`);
           }
-          return {
-            title: 'Task Completed',
-            output: `Task ${id} completed: ${task.description}${result ? `\nResult: ${result}` : ''}`,
-            metadata: { id, action: 'complete' },
-          };
+          return `Task $046003573393_AWS_us-east-1 completed: ${task.description}${result ? `\nResult: ${result}` : ''}`;
         }
 
         case 'list': {
           const tasks = listTasks();
           if (tasks.length === 0) {
-            return {
-              title: 'Task List',
-              output: 'No tasks found',
-              metadata: { count: 0 },
-            };
+            return 'No tasks found';
           }
           const lines = tasks.map(
             (t) =>
               `[${t.status === 'completed' ? 'x' : t.status === 'failed' ? '!' : ' '}] ${t.description}\n  ID: ${t.id} | Status: ${t.status}${t.result ? `\n  Result: ${t.result}` : ''}`
           );
-          return {
-            title: 'Task List',
-            output: lines.join('\n\n'),
-            metadata: { count: tasks.length },
-          };
+          return lines.join('\n\n');
         }
 
         default:

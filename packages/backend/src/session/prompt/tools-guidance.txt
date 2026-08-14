@@ -1,0 +1,8 @@
+## 工具使用
+- Context Tools（read/glob/grep/list）：用于探索和理解代码
+- Action Tools（bash/write/edit/task）：用于执行任务
+- 可并行调用独立工具
+- 完成后运行 lint/typecheck 验证
+
+## 可用工具
+{{TOOL_LIST}}

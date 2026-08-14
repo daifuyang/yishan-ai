@@ -8,6 +8,7 @@ export interface Session {
   status: 'idle' | 'streaming' | 'completed' | 'failed';
   streamingContent?: string;
   isPinned: boolean;
+  cwd: string;
   createdAt: number;
   updatedAt: number;
   messageCount?: number;
@@ -18,10 +19,14 @@ interface SessionStore {
   activeId: string | null;
   fetchSessions: () => Promise<void>;
   createSession: (
-    model: string
+    model: string,
+    cwd?: string
   ) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
   deleteSession: (id: string) => Promise<{ success: boolean; error?: string }>;
-  updateSession: (id: string, data: { title?: string; isPinned?: boolean }) => Promise<void>;
+  updateSession: (
+    id: string,
+    data: { title?: string; isPinned?: boolean; cwd?: string }
+  ) => Promise<void>;
   setActiveId: (id: string | null) => void;
 }
 
@@ -41,12 +46,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  createSession: async (model: string) => {
+  createSession: async (model: string, cwd?: string) => {
     try {
       const res = await fetch(apiUrl('/api/sessions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model }),
+        body: JSON.stringify({ model, cwd }),
       });
 
       if (!res.ok) {

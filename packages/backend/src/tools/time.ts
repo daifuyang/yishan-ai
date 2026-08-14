@@ -1,4 +1,4 @@
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import type { Tool, ToolContext } from './types.js';
 
 interface TimeArgs {
   timezone?: string;
@@ -25,7 +25,7 @@ export function createTimeTool(): Tool {
         },
       },
     },
-    async execute(args: unknown, _ctx: ToolContext): Promise<ExecuteResult> {
+    async execute(args: unknown, _ctx: ToolContext): Promise<string> {
       const { timezone, format = 'full' } = args as TimeArgs;
       const now = new Date();
 
@@ -48,21 +48,11 @@ export function createTimeTool(): Tool {
           const localDate = `${get('year')}-${get('month')}-${get('day')}`;
           const localTime = `${get('hour')}:${get('minute')}:${get('second')}`;
 
-          if (format === 'date') {
-            return { title: 'Current Date', output: localDate, metadata: { timezone, format } };
-          }
-          if (format === 'time') {
-            return { title: 'Current Time', output: localTime, metadata: { timezone, format } };
-          }
-          if (format === 'iso') {
-            return { title: 'ISO Time', output: now.toISOString(), metadata: { timezone, format } };
-          }
+          if (format === 'date') return localDate;
+          if (format === 'time') return localTime;
+          if (format === 'iso') return now.toISOString();
 
-          return {
-            title: 'Current Time',
-            output: `Timezone: ${timezone}\nLocal: ${localDate} ${localTime}\nUTC: ${now.toISOString()}`,
-            metadata: { timezone, format },
-          };
+          return `Timezone: ${timezone}\nLocal: ${localDate} ${localTime}\nUTC: ${now.toISOString()}`;
         } catch {
           throw new Error(
             `Invalid timezone: "${timezone}". Use IANA timezone names (e.g., "Asia/Shanghai", "America/New_York")`
@@ -75,17 +65,13 @@ export function createTimeTool(): Tool {
 
       switch (format) {
         case 'date':
-          return { title: 'Current Date', output: localDate, metadata: { format } };
+          return localDate;
         case 'time':
-          return { title: 'Current Time', output: localTime, metadata: { format } };
+          return localTime;
         case 'iso':
-          return { title: 'ISO Time', output: now.toISOString(), metadata: { format } };
+          return now.toISOString();
         default:
-          return {
-            title: 'Current Time',
-            output: `本地时间: ${localDate} ${localTime}\nUTC 时间: ${now.toUTCString()}\nISO 时间: ${now.toISOString()}`,
-            metadata: { format },
-          };
+          return `本地时间: ${localDate} ${localTime}\nUTC 时间: ${now.toUTCString()}\nISO 时间: ${now.toISOString()}`;
       }
     },
   };

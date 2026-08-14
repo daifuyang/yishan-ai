@@ -1,5 +1,5 @@
 import { createTodo, deleteTodo, listTodos, updateTodo } from './todo-store.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import type { Tool, ToolContext } from './types.js';
 
 interface TodoWriteArgs {
   action: 'create' | 'update' | 'delete' | 'list';
@@ -41,7 +41,7 @@ export function createTodoWriteTool(): Tool {
       },
       required: ['action'],
     },
-    async execute(args: unknown, _ctx: ToolContext): Promise<ExecuteResult> {
+    async execute(args: unknown, _ctx: ToolContext): Promise<string> {
       const { action, id, title, status, content } = args as TodoWriteArgs;
 
       switch (action) {
@@ -50,11 +50,7 @@ export function createTodoWriteTool(): Tool {
             throw new Error('title is required for create action');
           }
           const todo = createTodo(title, content);
-          return {
-            title: 'Todo Created',
-            output: `Created todo "${title}" with ID: ${todo.id}`,
-            metadata: { id: todo.id, action: 'create' },
-          };
+          return `Created todo "${title}" with ID: ${todo.id}`;
         }
 
         case 'update': {
@@ -65,11 +61,7 @@ export function createTodoWriteTool(): Tool {
           if (!todo) {
             throw new Error(`Todo not found: ${id}`);
           }
-          return {
-            title: 'Todo Updated',
-            output: `Updated todo ${id}: ${todo.title} [${todo.status}]`,
-            metadata: { id, action: 'update' },
-          };
+          return `Updated todo ${id}: ${todo.title} [${todo.status}]`;
         }
 
         case 'delete': {
@@ -80,31 +72,19 @@ export function createTodoWriteTool(): Tool {
           if (!deleted) {
             throw new Error(`Todo not found: ${id}`);
           }
-          return {
-            title: 'Todo Deleted',
-            output: `Deleted todo ${id}`,
-            metadata: { id, action: 'delete' },
-          };
+          return `Deleted todo ${id}`;
         }
 
         case 'list': {
           const todos = listTodos();
           if (todos.length === 0) {
-            return {
-              title: 'Todo List',
-              output: 'No todos found',
-              metadata: { count: 0 },
-            };
+            return 'No todos found';
           }
           const lines = todos.map(
             (t) =>
               `[${t.status === 'completed' ? 'x' : ' '}] ${t.title}${t.content ? `\n  ${t.content}` : ''}\n  ID: ${t.id} | Created: ${new Date(t.createdAt).toLocaleString()}`
           );
-          return {
-            title: 'Todo List',
-            output: lines.join('\n\n'),
-            metadata: { count: todos.length },
-          };
+          return lines.join('\n\n');
         }
 
         default:

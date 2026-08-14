@@ -1,5 +1,4 @@
-import { logPermission } from './permission-log.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import type { Tool, ToolContext } from './types.js';
 
 interface WebFetchArgs {
   url: string;
@@ -27,8 +26,8 @@ export function createWebFetchTool(): Tool {
       },
       required: ['url'],
     },
-    async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
-      const { url, description } = args as WebFetchArgs;
+    async execute(args: unknown, ctx: ToolContext): Promise<string> {
+      const { url } = args as WebFetchArgs;
 
       if (!url) {
         throw new Error('url is required');
@@ -47,7 +46,7 @@ export function createWebFetchTool(): Tool {
         );
       }
 
-      logPermission(ctx.sessionId, 'network', { path: url });
+      // network access logged via sandbox
 
       try {
         const controller = new AbortController();
@@ -64,33 +63,13 @@ export function createWebFetchTool(): Tool {
         clearTimeout(timeout);
 
         if (!response.ok) {
-          return {
-            title: description || url,
-            output: `HTTP ${response.status} ${response.statusText}\nURL: ${url}`,
-            metadata: {
-              url,
-              status: response.status,
-              statusText: response.statusText,
-            },
-          };
+          return `HTTP ${response.status} ${response.statusText}\nURL: ${url}`;
         }
 
-        const contentType = response.headers.get('content-type') || '';
         const text = await response.text();
         const truncated = text.length > MAX_RESPONSE_SIZE;
-        const output = truncated ? `${text.slice(0, MAX_RESPONSE_SIZE)}\n... (truncated)` : text;
 
-        return {
-          title: description || new URL(url).hostname,
-          output,
-          metadata: {
-            url,
-            contentType,
-            status: response.status,
-            truncated,
-            originalLength: text.length,
-          },
-        };
+        return truncated ? `${text.slice(0, MAX_RESPONSE_SIZE)}\n... (truncated)` : text;
       } catch (error: unknown) {
         const err = error as { name?: string; message?: string };
         if (err.name === 'AbortError') {

@@ -1,6 +1,15 @@
 'use client';
 
-import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import {
+  ChevronRight,
+  FolderClosed,
+  FolderOpen,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import React, { Suspense, useCallback, useState } from 'react';
@@ -189,6 +198,50 @@ function SessionItem({ session }: { session: Session }) {
   );
 }
 
+function SessionGroup({ group }: { group: { key: string; label: string; sessions: Session[] } }) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div>
+      {group.label && (
+        <button
+          type="button"
+          className="group flex items-center gap-1 w-full px-1 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+        >
+          <span className="relative h-4 w-4 flex items-center justify-center shrink-0">
+            <ChevronRight
+              className={cn(
+                'h-3.5 w-3.5 text-muted-foreground transition-transform duration-150 absolute opacity-0 group-hover:opacity-100',
+                expanded && 'rotate-90'
+              )}
+            />
+            <span className="group-hover:opacity-0 transition-opacity duration-150">
+              {expanded ? (
+                <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <FolderClosed className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </span>
+          </span>
+          <span className="text-xs text-muted-foreground font-medium truncate">{group.label}</span>
+          <span className="text-[10px] text-muted-foreground/60 ml-auto tabular-nums">
+            {group.sessions.length}
+          </span>
+        </button>
+      )}
+      {expanded && (
+        <div className="flex flex-col gap-1 animate-in fade-in duration-150">
+          {group.sessions.map((session) => (
+            <SessionItem key={session.id} session={session} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SessionListInner() {
   const { sessions, fetchSessions } = useSessionStore();
 
@@ -198,12 +251,39 @@ function SessionListInner() {
 
   const displaySessions = sessions.slice(0, DEFAULT_SESSION_LIMIT);
 
+  const grouped = React.useMemo(() => {
+    const groups: { key: string; label: string; sessions: Session[] }[] = [];
+    const map = new Map<string, Session[]>();
+
+    for (const s of displaySessions) {
+      const key = s.cwd || '__default__';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+
+    for (const [key, items] of map) {
+      const label = key === '__default__' ? '' : key.split('/').filter(Boolean).pop() || key;
+      groups.push({ key, label, sessions: items });
+    }
+
+    return groups;
+  }, [displaySessions]);
+
+  const showGroups =
+    grouped.length > 1 || (grouped.length === 1 && grouped[0].key !== '__default__');
+
   return (
     <div className="flex flex-col px-3 h-full">
       <div className="flex-1 min-h-0 overflow-y-auto">
         {displaySessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground text-sm">
             <p>暂无会话记录</p>
+          </div>
+        ) : showGroups ? (
+          <div className="flex flex-col gap-2">
+            {grouped.map((group) => (
+              <SessionGroup key={group.key} group={group} />
+            ))}
           </div>
         ) : (
           <div className="flex flex-col gap-1">

@@ -19,11 +19,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
-const SIDEBAR_COOKIE_NAME = 'sidebar_state';
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH = '16rem';
+const SIDEBAR_STORAGE_KEY = 'sidebar_state';
+const SIDEBAR_WIDTH = '280px';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
-const SIDEBAR_WIDTH_ICON = '3rem';
+const SIDEBAR_WIDTH_ICON = '68px';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 type SidebarContextProps = {
@@ -72,7 +71,13 @@ const SidebarProvider = React.forwardRef<
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
-    const [_open, _setOpen] = React.useState(defaultOpen);
+    const [_open, _setOpen] = React.useState(() => {
+      if (typeof window === 'undefined') return defaultOpen;
+      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (stored === 'true') return true;
+      if (stored === 'false') return false;
+      return defaultOpen;
+    });
     const open = openProp ?? _open;
     const openRef = React.useRef(open);
     React.useEffect(() => {
@@ -88,9 +93,7 @@ const SidebarProvider = React.forwardRef<
           _setOpen(openState);
         }
 
-        // This sets the cookie to keep the sidebar state.
-        // biome-ignore lint/suspicious/noDocumentCookie: Cookie Store API not widely supported
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, String(openState));
       },
       [setOpenProp]
     );
@@ -229,7 +232,7 @@ const Sidebar = React.forwardRef<
         {/* This is what handles the sidebar gap on desktop */}
         <div
           className={cn(
-            'relative w-[--sidebar-width] bg-transparent transition-[width,left,right] duration-200 ease-linear',
+            'relative w-[--sidebar-width] bg-transparent transition-[width] duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)]',
             'group-data-[collapsible=offcanvas]:w-0',
             'group-data-[side=right]:rotate-180',
             variant === 'floating' || variant === 'inset'
@@ -239,7 +242,7 @@ const Sidebar = React.forwardRef<
         />
         <div
           className={cn(
-            'fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex',
+            'fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)] md:flex',
             side === 'left'
               ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
               : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',

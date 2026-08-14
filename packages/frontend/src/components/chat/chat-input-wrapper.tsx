@@ -1,10 +1,9 @@
 'use client';
 
-import type { ChatMode } from '@/lib/constants';
 import { ChatInput } from './chat-input';
 
 interface ChatInputWrapperProps {
-  onSend: (content: string, model: string, mode: ChatMode) => void;
+  onSend: (content: string, model: string) => void;
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
@@ -12,6 +11,8 @@ interface ChatInputWrapperProps {
   noBorder?: boolean;
   initialContent?: string;
   showPadding?: boolean;
+  cwd?: string;
+  onCwdChange?: (cwd: string) => void;
 }
 
 export function ChatInputWrapper({
@@ -23,6 +24,8 @@ export function ChatInputWrapper({
   noBorder,
   initialContent,
   showPadding = true,
+  cwd,
+  onCwdChange,
 }: ChatInputWrapperProps) {
   return (
     <div className={`w-full ${showPadding ? 'px-4 sm:px-0' : ''}`}>
@@ -34,6 +37,8 @@ export function ChatInputWrapper({
         defaultModel={defaultModel}
         noBorder={noBorder}
         initialContent={initialContent}
+        cwd={cwd}
+        onCwdChange={onCwdChange}
       />
     </div>
   );

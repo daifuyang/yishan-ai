@@ -40,4 +40,19 @@ export function runMigrations(db: Database.Database): void {
   if (!hasDeletedAt) {
     db.exec('ALTER TABLE messages ADD COLUMN deleted_at INTEGER');
   }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS approval_logs (
+      id          TEXT PRIMARY KEY,
+      session_id  TEXT NOT NULL,
+      action      TEXT NOT NULL,
+      description TEXT NOT NULL,
+      detail      TEXT NOT NULL,
+      outcome     TEXT NOT NULL CHECK(outcome IN ('allowed', 'rejected', 'timeout')),
+      created_at  TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_approval_logs_session
+      ON approval_logs(session_id, created_at);
+  `);
 }

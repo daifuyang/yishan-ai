@@ -16,10 +16,13 @@ model Session {
   status           String    @default("idle")
   streamingContent String?
   isPinned         Boolean   @default(false)
+  cwd              String    @default("")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   messages         Message[]
+  events           SessionEvent[]
+  approvalLogs     ApprovalLog[]
 
   @@map("sessions")
 }
@@ -42,4 +45,33 @@ model Message {
   @@index([sessionId, createdAt])
   @@index([sessionId])
   @@map("messages")
+}
+
+model SessionEvent {
+  id        Int      @id @default(autoincrement())
+  sessionId String
+  seq       Int
+  type      String
+  dataJson  String
+  createdAt DateTime @default(now())
+
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, seq])
+  @@map("session_events")
+}
+
+model ApprovalLog {
+  id          String   @id @default(uuid())
+  sessionId   String
+  action      String
+  description String
+  detail      String
+  outcome     String
+  createdAt   DateTime @default(now())
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("approval_logs")
 }

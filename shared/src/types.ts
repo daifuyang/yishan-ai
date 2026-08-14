@@ -1,3 +1,32 @@
+export interface JSONSchema {
+  type: 'object';
+  properties?: Record<string, object>;
+  required?: string[];
+  [key: string]: unknown;
+}
+
+export interface ToolContext {
+  sessionId: string;
+  messageId: string;
+  agent: string;
+  abort: AbortSignal;
+  directory: string;
+  worktree: string;
+}
+
+export interface Tool {
+  id: string;
+  description: string;
+  inputSchema: JSONSchema;
+  execute(args: unknown, ctx: ToolContext): Promise<string>;
+}
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: JSONSchema;
+}
+
 export type Role = 'user' | 'assistant' | 'system';
 
 export interface StoredMessage {

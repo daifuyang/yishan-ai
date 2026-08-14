@@ -1,18 +1,15 @@
+import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { listDirInSandbox } from './docker-sandbox.js';
-import { logPermission } from './permission-log.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import { promisify } from 'node:util';
+import { isPathContained } from '../sandbox/path-check.js';
+import type { Tool, ToolContext } from './types.js';
+
+const execFileAsync = promisify(execFile);
 
 interface ListArgs {
   path: string;
   recursive?: boolean;
-}
-
-function isWithinDirectory(targetPath: string, directory: string): boolean {
-  const resolved = path.resolve(targetPath);
-  const dirResolved = path.resolve(directory);
-  return resolved.startsWith(dirResolved + path.sep) || resolved === dirResolved;
 }
 
 function formatFileSize(size: number): string {
@@ -39,7 +36,7 @@ export function createListTool(): Tool {
       },
       required: ['path'],
     },
-    async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
+    async execute(args: unknown, ctx: ToolContext): Promise<string> {
       const { path: dirPath, recursive = false } = args as ListArgs;
 
       if (!dirPath) {
@@ -50,11 +47,9 @@ export function createListTool(): Tool {
         ? dirPath
         : path.resolve(ctx.directory, dirPath);
 
-      if (!isWithinDirectory(resolvedPath, ctx.directory)) {
+      if (!isPathContained(resolvedPath, ctx.directory)) {
         throw new Error(`Access denied: ${dirPath} is outside workspace`);
       }
-
-      logPermission(ctx.sessionId, 'read', { path: resolvedPath });
 
       try {
         if (!fs.existsSync(resolvedPath)) {
@@ -66,42 +61,34 @@ export function createListTool(): Tool {
           throw new Error(`${dirPath} is not a directory`);
         }
 
-        let output: string;
-
         if (recursive) {
-          output = await listDirInSandbox(`${resolvedPath} -R`, ctx.directory);
-        } else {
-          const entries = fs.readdirSync(resolvedPath);
-          const formatted: string[] = [];
-
-          for (const entry of entries.sort()) {
-            const fullPath = path.join(resolvedPath, entry);
-            try {
-              const entryStat = fs.statSync(fullPath);
-              if (entryStat.isDirectory()) {
-                formatted.push(`${entry}/`);
-              } else if (entryStat.isSymbolicLink()) {
-                formatted.push(`${entry}@`);
-              } else {
-                const size = formatFileSize(entryStat.size);
-                formatted.push(`${entry} (${size})`);
-              }
-            } catch {
-              formatted.push(`${entry}?`);
-            }
-          }
-
-          output = formatted.join('\n');
+          const { stdout } = await execFileAsync('ls', ['-laR', resolvedPath], {
+            timeout: 30000,
+          });
+          return stdout;
         }
 
-        return {
-          title: path.basename(resolvedPath) || '/',
-          output,
-          metadata: {
-            path: resolvedPath,
-            recursive,
-          },
-        };
+        const entries = fs.readdirSync(resolvedPath);
+        const formatted: string[] = [];
+
+        for (const entry of entries.sort()) {
+          const fullPath = path.join(resolvedPath, entry);
+          try {
+            const entryStat = fs.statSync(fullPath);
+            if (entryStat.isDirectory()) {
+              formatted.push(`${entry}/`);
+            } else if (entryStat.isSymbolicLink()) {
+              formatted.push(`${entry}@`);
+            } else {
+              const size = formatFileSize(entryStat.size);
+              formatted.push(`${entry} (${size})`);
+            }
+          } catch {
+            formatted.push(`${entry}?`);
+          }
+        }
+
+        return formatted.join('\n');
       } catch (error: unknown) {
         const err = error as { code?: string };
         if (err.code === 'EACCES') {

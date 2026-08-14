@@ -1,21 +1,14 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createTwoFilesPatch } from 'diff';
-import { readFileInSandbox, writeFileInSandbox } from './docker-sandbox.js';
-import { logPermission } from './permission-log.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import { isPathContained } from '../sandbox/path-check.js';
+import type { Tool, ToolContext } from './types.js';
 
 interface EditArgs {
   filePath: string;
   oldString: string;
   newString: string;
   replaceAll?: boolean;
-}
-
-function isWithinDirectory(filePath: string, directory: string): boolean {
-  const resolved = path.resolve(filePath);
-  const dirResolved = path.resolve(directory);
-  return resolved.startsWith(dirResolved + path.sep) || resolved === dirResolved;
 }
 
 function normalizeLineEndings(text: string): string {
@@ -53,7 +46,7 @@ export function createEditTool(): Tool {
       },
       required: ['filePath', 'oldString', 'newString'],
     },
-    async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
+    async execute(args: unknown, ctx: ToolContext): Promise<string> {
       const { filePath, oldString, newString, replaceAll = false } = args as EditArgs;
 
       if (!filePath) {
@@ -68,11 +61,9 @@ export function createEditTool(): Tool {
         ? filePath
         : path.resolve(ctx.directory, filePath);
 
-      if (!isWithinDirectory(resolvedPath, ctx.directory)) {
+      if (!isPathContained(resolvedPath, ctx.directory)) {
         throw new Error(`Access denied: ${filePath} is outside workspace`);
       }
-
-      logPermission(ctx.sessionId, 'edit', { path: resolvedPath });
 
       try {
         if (!fs.existsSync(resolvedPath)) {
@@ -84,7 +75,7 @@ export function createEditTool(): Tool {
           throw new Error(`${filePath} is not a regular file`);
         }
 
-        const content = await readFileInSandbox(resolvedPath, ctx.directory);
+        const content = fs.readFileSync(resolvedPath, 'utf8');
         let contentNormalized = normalizeLineEndings(content);
         const oldNormalized = normalizeLineEndings(oldString);
         const newNormalized = normalizeLineEndings(newString);
@@ -98,47 +89,32 @@ export function createEditTool(): Tool {
           ).length;
           contentNormalized = contentNormalized.split(oldNormalized).join(newNormalized);
 
-          await writeFileInSandbox(resolvedPath, contentNormalized, ctx.directory);
+          fs.writeFileSync(resolvedPath, contentNormalized, 'utf8');
 
-          return {
-            title: path.basename(resolvedPath),
-            output: `Replaced ${count} occurrence(s) in ${filePath}`,
-            metadata: {
-              path: resolvedPath,
-              occurrences: count,
-              replaceAll: true,
-            },
-          };
-        } else {
-          const index = contentNormalized.indexOf(oldNormalized);
-          if (index === -1) {
-            throw new Error(`oldString not found in ${filePath}`);
-          }
-
-          const before = contentNormalized.slice(0, index);
-          const after = contentNormalized.slice(index + oldNormalized.length);
-          contentNormalized = before + newNormalized + after;
-
-          const patch = createTwoFilesPatch(
-            filePath,
-            filePath,
-            normalizeLineEndings(oldString),
-            normalizeLineEndings(newString),
-            '',
-            ''
-          );
-
-          await writeFileInSandbox(resolvedPath, contentNormalized, ctx.directory);
-
-          return {
-            title: path.basename(resolvedPath),
-            output: `Edited ${filePath}\n${patch}`,
-            metadata: {
-              path: resolvedPath,
-              patch,
-            },
-          };
+          return `Replaced ${count} occurrence(s) in ${filePath}`;
         }
+
+        const index = contentNormalized.indexOf(oldNormalized);
+        if (index === -1) {
+          throw new Error(`oldString not found in ${filePath}`);
+        }
+
+        const before = contentNormalized.slice(0, index);
+        const after = contentNormalized.slice(index + oldNormalized.length);
+        contentNormalized = before + newNormalized + after;
+
+        const patch = createTwoFilesPatch(
+          filePath,
+          filePath,
+          normalizeLineEndings(oldString),
+          normalizeLineEndings(newString),
+          '',
+          ''
+        );
+
+        fs.writeFileSync(resolvedPath, contentNormalized, 'utf8');
+
+        return `Edited ${filePath}\n${patch}`;
       } catch (error: unknown) {
         const err = error as { code?: string };
         if (err.code === 'EACCES') {

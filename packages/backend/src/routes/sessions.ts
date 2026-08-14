@@ -6,6 +6,7 @@ import {
   deleteSession,
   getSession,
   listSessions,
+  updateSessionCwd,
   updateSessionPin,
   updateSessionTitle,
 } from '../stores/session-store.js';
@@ -13,11 +14,13 @@ import {
 const CreateSessionSchema = z.object({
   model: z.string(),
   title: z.string().optional(),
+  cwd: z.string().optional(),
 });
 
 const UpdateSessionSchema = z.object({
   title: z.string().optional(),
   isPinned: z.boolean().optional(),
+  cwd: z.string().optional(),
 });
 
 type CreateSessionBody = z.infer<typeof CreateSessionSchema>;
@@ -32,7 +35,7 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/sessions',
     async (request: FastifyRequest<{ Body: CreateSessionBody }>) => {
       const body = request.body;
-      return createSession(body.model, body.title);
+      return createSession(body.model, body.title, body.cwd);
     }
   );
 
@@ -53,10 +56,24 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/sessions/:id',
     async (
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateSessionBody }>,
-      _reply: FastifyReply
+      reply: FastifyReply
     ) => {
       const { id } = request.params;
       const body = request.body;
+      if (body.cwd !== undefined) {
+        const session = await getSession(id);
+        if (!session) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+        if (
+          session.status !== 'idle' &&
+          session.status !== 'completed' &&
+          session.status !== 'failed'
+        ) {
+          return reply.code(409).send({ error: 'Cannot change cwd while session is streaming' });
+        }
+        await updateSessionCwd(id, body.cwd);
+      }
       if (body.title !== undefined) {
         await updateSessionTitle(id, body.title);
       }

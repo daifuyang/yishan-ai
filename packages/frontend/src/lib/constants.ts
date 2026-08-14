@@ -8,5 +8,3 @@ export const AVAILABLE_MODELS = [
   { id: 'MiniMax-M2.1-highspeed', name: 'MiniMax-M2.1-highspeed' },
   { id: 'MiniMax-M2.1', name: 'MiniMax-M2.1' },
 ] as const;
-
-export type ChatMode = 'plan' | 'build';

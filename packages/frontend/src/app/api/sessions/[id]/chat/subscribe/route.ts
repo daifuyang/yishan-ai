@@ -1,4 +1,17 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { createBackendUrl } from '@/lib/backend-fetch';
+
+const TOKEN_PATH = path.join(os.homedir(), '.yishan-ai', 'auth-token');
+
+function getAuthToken(): string {
+  try {
+    return fs.readFileSync(TOKEN_PATH, 'utf-8').trim();
+  } catch {
+    return '';
+  }
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -6,12 +19,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const backendUrl = `${createBackendUrl(`/api/sessions/${id}/chat/subscribe`)}`;
 
     const cookieHeader = request.headers.get('cookie');
+    const token = getAuthToken();
 
     const response = await fetch(backendUrl, {
       headers: {
         Accept: 'text/event-stream',
         'Cache-Control': 'no-cache',
         ...(cookieHeader && { Cookie: cookieHeader }),
+        ...(token && { 'x-auth-token': token }),
+        host: '127.0.0.1:4800',
       },
     });
 

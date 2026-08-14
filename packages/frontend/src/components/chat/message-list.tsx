@@ -15,7 +15,7 @@ import type { ContentBlock, Message, ToolCall, ToolCallGroup } from '@/types';
 interface MessageListProps {
   messages: Message[];
   onRollback?: (messageId: string, content: string) => void;
-  onRetry?: (messageId: string, model: string, mode: 'plan' | 'build') => void;
+  onRetry?: (messageId: string, model: string) => void;
   className?: string;
 }
 
@@ -218,7 +218,7 @@ function UserBubble({
   copiedId: string | null;
   onCopy: (content: string, id: string) => void;
   onRollback?: (messageId: string, content: string) => void;
-  onRetry?: (messageId: string, model: string, mode: 'plan' | 'build') => void;
+  onRetry?: (messageId: string, model: string) => void;
 }) {
   const textContent =
     typeof message.content === 'string'
@@ -252,7 +252,7 @@ function UserBubble({
             variant="ghost"
             size="sm"
             className="h-auto py-1 px-2 text-red-500 hover:text-red-400 gap-1 [&_svg]:size-3"
-            onClick={() => onRetry(message.id, message.model || 'MiniMax-M2.7', 'build')}
+            onClick={() => onRetry(message.id, message.model || 'MiniMax-M2.7')}
           >
             <RefreshCw className="h-3 w-3" />
             重试

@@ -7,7 +7,7 @@ import { prisma, streamProcessor } from '../lib/stream-processor.js';
 import { buildSystemPrompt } from '../session/system-prompt.js';
 import { toolRegistry } from '../tools/index.js';
 
-function getDockerWorkspacePaths(): string[] {
+function getWorkspacePaths(): string[] {
   const config = configManager.getAll();
   return config.workspace?.directories || [];
 }
@@ -15,7 +15,6 @@ function getDockerWorkspacePaths(): string[] {
 const SendMessageSchema = z.object({
   content: z.union([z.string(), z.array(z.unknown())]),
   model: z.string().optional(),
-  mode: z.enum(['plan', 'build']).default('build'),
 });
 
 type SendMessageBody = z.infer<typeof SendMessageSchema>;
@@ -29,7 +28,7 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
     ) => {
       const { id } = request.params;
       const body = request.body;
-      const { content, model, mode } = body;
+      const { content, model } = body;
 
       const log = createLogger(id);
 
@@ -53,15 +52,15 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
         description: t.description,
         inputSchema: t.inputSchema,
       }));
-      const dockerPaths = getDockerWorkspacePaths();
+      const workspacePaths = getWorkspacePaths();
+      const sessionCwd = session.cwd || workspacePaths[0] || '';
       const toolList = [...builtInTools, ...mcpTools]
         .map((t) => `  - ${t.name}: ${t.description}`)
         .join('\n');
 
-      const { basePrompt, planReminder, buildSwitch } = await buildSystemPrompt({
-        mode,
-        workDir: dockerPaths[0] || '',
-        sandboxDirs: dockerPaths,
+      const { prompt: systemPrompt } = await buildSystemPrompt({
+        workDir: sessionCwd,
+        sandboxDirs: workspacePaths,
         toolList,
       });
 
@@ -72,10 +71,7 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
       const { messageId, queued } = await streamProcessor.submitTask({
         sessionId: id,
         userMessage,
-        mode,
-        systemPrompt: basePrompt,
-        planReminder,
-        buildSwitch,
+        systemPrompt,
         tools: [...mcpTools, ...builtInTools],
       });
 

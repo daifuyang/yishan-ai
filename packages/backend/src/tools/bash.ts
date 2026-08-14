@@ -1,26 +1,7 @@
-import { runInSandbox, stripAnsi } from './docker-sandbox.js';
-import { logPermission } from './permission-log.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
-
-const DANGEROUS_COMMANDS = new Set([
-  'rm -rf /',
-  'rm -rf /*',
-  'mkfs',
-  'dd if=',
-  ':(){:|:&};:', // fork bomb
-  '> /dev/sda',
-  'mv / /dev/null',
-]);
-
-function isDangerousCommand(command: string): boolean {
-  const lower = command.toLowerCase().trim();
-  for (const dangerous of DANGEROUS_COMMANDS) {
-    if (lower.includes(dangerous)) {
-      return true;
-    }
-  }
-  return false;
-}
+import { getSessionPolicy, requestApproval } from '../approval/index.js';
+import { runInSandbox } from '../sandbox/index.js';
+import type { SandboxPolicy } from '../sandbox/types.js';
+import type { Tool, ToolContext } from './types.js';
 
 interface BashArgs {
   command: string;
@@ -31,8 +12,8 @@ interface BashArgs {
 export function createBashTool(): Tool {
   return {
     id: 'bash',
-    description: `Execute a bash command and return the output.
-All paths are validated against workspace directories.`,
+    description: `Execute a bash command in a sandboxed environment.
+Commands are isolated via macOS sandbox-exec. Write access is restricted to the workspace directory by default.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -51,8 +32,8 @@ All paths are validated against workspace directories.`,
       },
       required: ['command'],
     },
-    async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
-      const { command, cwd, description } = args as BashArgs;
+    async execute(args: unknown, ctx: ToolContext): Promise<string> {
+      const { command, cwd } = args as BashArgs;
 
       if (!command || typeof command !== 'string') {
         throw new Error('command is required and must be a string');
@@ -60,66 +41,48 @@ All paths are validated against workspace directories.`,
 
       const workDir = cwd || ctx.directory;
 
-      logPermission(ctx.sessionId, 'exec', {
+      const policy: SandboxPolicy = {
+        mode: 'workspace-write',
+        workspaceRoot: ctx.directory,
+        sessionId: ctx.sessionId,
+      };
+
+      const sessionPolicy = getSessionPolicy(ctx.sessionId);
+      if (sessionPolicy === 'ask') {
+        const outcome = await requestApproval({
+          sessionId: ctx.sessionId,
+          action: 'exec',
+          description: `Execute: ${command}`,
+          detail: { command, cwd: workDir },
+        });
+        if (outcome !== 'allowed') {
+          return `Error: Command execution was ${outcome === 'timeout' ? 'timed out' : 'denied'} by user`;
+        }
+      } else if (sessionPolicy === 'deny') {
+        return 'Error: Command execution is denied by session policy';
+      }
+
+      const result = await runInSandbox({
         command,
-        path: workDir,
+        policy,
+        cwd: workDir,
+        timeout: 60000,
       });
 
-      if (isDangerousCommand(command)) {
-        return {
-          title: description || 'Shell command',
-          output: 'Error: Potentially dangerous command blocked',
-          metadata: { blocked: true },
-        };
+      if (result.denied) {
+        return `Error: Sandbox denied the operation.\nSTDERR: ${result.stderr}`;
       }
 
-      const timeout = 60000;
-
-      try {
-        const { stdout, stderr } = await runInSandbox({
-          command,
-          workDir,
-          timeout,
-        });
-
-        let output = stripAnsi(stdout);
-        if (stderr) {
-          output += `\nSTDERR: ${stripAnsi(stderr)}`;
-        }
-
-        return {
-          title: description || 'Shell command',
-          output: output || '(no output)',
-          metadata: {
-            command,
-            cwd: workDir,
-            exitCode: 0,
-          },
-        };
-      } catch (error: unknown) {
-        const err = error as {
-          stdout?: string;
-          stderr?: string;
-          message?: string;
-          code?: number | string;
-          killed?: boolean;
-          signal?: string;
-        };
-        let output = err.stdout ? stripAnsi(err.stdout) : '';
-        output += `\nSTDERR: ${err.stderr ? stripAnsi(err.stderr) : err.message}`;
-
-        return {
-          title: description || 'Shell command',
-          output: output || `Error: ${err.message}`,
-          metadata: {
-            command,
-            cwd: workDir,
-            exitCode: err.code || 1,
-            killed: err.killed,
-            signal: err.signal,
-          },
-        };
+      let output = result.stdout;
+      if (result.stderr) {
+        output += `\nSTDERR: ${result.stderr}`;
       }
+
+      if (result.exitCode !== 0) {
+        output += `\n(exit code: ${result.exitCode})`;
+      }
+
+      return output || '(no output)';
     },
   };
 }

@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import type { Tool as SDKTool } from '@modelcontextprotocol/sdk/types';
+import type { MCPTool } from '@yishan-ai/shared';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -32,18 +34,7 @@ export interface MCPServer {
   error?: string;
 }
 
-export interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: unknown;
-}
-
-interface RawMCPTool {
-  name: string;
-  description?: string;
-  input_schema?: unknown;
-  inputSchema?: unknown;
-}
+export type { MCPTool };
 
 export class McpManager extends EventEmitter {
   private connections = new Map<
@@ -148,13 +139,13 @@ export class McpManager extends EventEmitter {
       await client.connect(transport);
 
       const toolsResult = await client.listTools();
-      const tools = (toolsResult as { tools?: RawMCPTool[] }).tools || [];
+      const tools = (toolsResult as { tools?: SDKTool[] }).tools || [];
 
-      const mcpTools: MCPTool[] = (tools as RawMCPTool[]).map((t) => {
-        const inputSchema = t.input_schema || t.inputSchema || { type: 'object', properties: {} };
+      const mcpTools: MCPTool[] = tools.map((t) => {
+        const inputSchema = t.inputSchema || { type: 'object' as const, properties: {} };
         mcpLog('INFO', `Mapping tool ${t.name}`, {
-          hasInputSchema: !!(t.input_schema || t.inputSchema),
-          inputSchemaType: (inputSchema as { type?: string }).type,
+          hasInputSchema: !!t.inputSchema,
+          inputSchemaType: inputSchema.type,
         });
         return {
           name: t.name,

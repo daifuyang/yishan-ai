@@ -1,5 +1,4 @@
-import { logPermission } from './permission-log.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import type { Tool, ToolContext } from './types.js';
 
 interface WebSearchArgs {
   query: string;
@@ -24,14 +23,14 @@ export function createWebSearchTool(): Tool {
       },
       required: ['query'],
     },
-    async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
+    async execute(args: unknown, ctx: ToolContext): Promise<string> {
       const { query, limit = 10 } = args as WebSearchArgs;
 
       if (!query) {
         throw new Error('query is required');
       }
 
-      logPermission(ctx.sessionId, 'network', { path: `search:${query}` });
+      // network access logged via sandbox
 
       try {
         const encodedQuery = encodeURIComponent(query);
@@ -79,17 +78,7 @@ export function createWebSearchTool(): Tool {
           results.push(`${title}\n${href}${snippet ? `\n${snippet}` : ''}`);
         }
 
-        const output =
-          results.length > 0 ? results.join('\n\n') : `No results found for "${query}"`;
-
-        return {
-          title: `Search: ${query}`,
-          output,
-          metadata: {
-            query,
-            resultCount: results.length,
-          },
-        };
+        return results.length > 0 ? results.join('\n\n') : `No results found for "${query}"`;
       } catch (error: unknown) {
         const err = error as Error;
         throw new Error(`Web search failed: ${err.message}`);

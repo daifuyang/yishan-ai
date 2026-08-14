@@ -11,28 +11,81 @@ function loadTemplate(filename: string): string {
   return fs.readFileSync(templatePath, 'utf-8');
 }
 
-const PROMPT_DEFAULT = loadTemplate('default.txt');
-const PROMPT_PLAN = loadTemplate('plan.txt');
+export interface PromptContext {
+  workDir: string;
+  sandboxDirs: string[];
+  toolList: string;
+  skills: string;
+}
+
+export interface PromptSection {
+  name: string;
+  order: number;
+  render(ctx: PromptContext): string | null;
+}
+
+const personaSection: PromptSection = {
+  name: 'persona',
+  order: 0,
+  render() {
+    return loadTemplate('persona.txt');
+  },
+};
+
+const environmentSection: PromptSection = {
+  name: 'environment',
+  order: 10,
+  render(ctx) {
+    return loadTemplate('environment.txt')
+      .replace('{{WORK_DIR}}', ctx.workDir || '需配置')
+      .replace(
+        '{{SANDBOX_DIRS}}',
+        ctx.sandboxDirs.length > 0 ? ctx.sandboxDirs.join('、') : '需配置'
+      );
+  },
+};
+
+const toolsGuidanceSection: PromptSection = {
+  name: 'tools-guidance',
+  order: 20,
+  render(ctx) {
+    return loadTemplate('tools-guidance.txt').replace('{{TOOL_LIST}}', ctx.toolList || '无');
+  },
+};
+
+const skillCatalogSection: PromptSection = {
+  name: 'skill-catalog',
+  order: 30,
+  render(ctx) {
+    if (ctx.skills === '无') return null;
+    return loadTemplate('skill-catalog.txt').replace('{{SKILLS}}', ctx.skills);
+  },
+};
+
+const builtinSections: PromptSection[] = [
+  personaSection,
+  environmentSection,
+  toolsGuidanceSection,
+  skillCatalogSection,
+];
+
+function assembleSections(sections: PromptSection[], ctx: PromptContext): string {
+  return sections
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((s) => s.render(ctx))
+    .filter((content): content is string => content !== null)
+    .join('\n\n');
+}
 
 export interface SystemPromptOptions {
-  mode: 'plan' | 'build';
   workDir: string;
   sandboxDirs: string[];
   toolList: string;
 }
 
-function generateBuildSwitch(): string {
-  return `<system-reminder>
-Your operational mode has changed from plan to build.
-You are no longer in read-only mode.
-You are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.
-</system-reminder>`;
-}
-
 export async function buildSystemPrompt(options: SystemPromptOptions): Promise<{
-  basePrompt: string;
-  planReminder: string;
-  buildSwitch: string;
+  prompt: string;
 }> {
   const { workDir, sandboxDirs, toolList } = options;
 
@@ -44,14 +97,9 @@ export async function buildSystemPrompt(options: SystemPromptOptions): Promise<{
       ? enabledSkills.map((s) => `【${s.metadata.name}】\n${s.content}`).join('\n\n')
       : '无';
 
-  const basePrompt = PROMPT_DEFAULT.replace('{{WORK_DIR}}', workDir || '需配置')
-    .replace('{{SANDBOX_DIRS}}', sandboxDirs.length > 0 ? sandboxDirs.join('、') : '需配置')
-    .replace('{{TOOL_LIST}}', toolList || '无')
-    .replace('{{SKILLS}}', skillsContent);
+  const ctx: PromptContext = { workDir, sandboxDirs, toolList, skills: skillsContent };
 
-  return {
-    basePrompt,
-    planReminder: PROMPT_PLAN,
-    buildSwitch: generateBuildSwitch(),
-  };
+  const prompt = assembleSections(builtinSections, ctx);
+
+  return { prompt };
 }

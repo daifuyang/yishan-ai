@@ -1,6 +1,6 @@
 import { sanitize } from './sanitize.js';
 import { truncateOutput } from './truncate.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import type { Tool, ToolContext } from './types.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -42,7 +42,7 @@ class ToolRegistry {
     return Array.from(this.tools.keys());
   }
 
-  async call(name: string, args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
+  async call(name: string, args: unknown, ctx: ToolContext): Promise<string> {
     const tool = this.tools.get(name);
     if (!tool) {
       throw new Error(`Tool "${name}" not found`);
@@ -52,25 +52,15 @@ class ToolRegistry {
     toolLog('INFO', `Calling tool: ${name}`, { argsKeys: Object.keys(args as object) });
 
     try {
-      const result = await tool.execute(args, ctx);
+      const output = await tool.execute(args, ctx);
       const duration = Date.now() - startTime;
 
-      const sanitizedOutput = sanitize(result.output);
+      const sanitizedOutput = sanitize(output);
       const truncatedResult = truncateOutput(sanitizedOutput);
 
       toolLog('INFO', `Tool ${name} completed`, { duration });
 
-      return {
-        ...result,
-        output: truncatedResult.content,
-        metadata: {
-          ...result.metadata,
-          truncated: truncatedResult.truncated,
-          ...(truncatedResult.truncated && truncatedResult.outputPath
-            ? { outputPath: truncatedResult.outputPath }
-            : {}),
-        },
-      };
+      return truncatedResult.content;
     } catch (error: unknown) {
       const err = error as Error;
       const duration = Date.now() - startTime;

@@ -1,12 +1,25 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as nodePath from 'node:path';
+
 const BACKEND_URL = (process.env.BACKEND_URL || 'http://127.0.0.1:4800').replace(/\/+$/, '');
 const TIMEOUT_MS = 10000;
+const TOKEN_PATH = nodePath.join(os.homedir(), '.yishan-ai', 'auth-token');
+
+function getAuthToken(): string {
+  try {
+    return fs.readFileSync(TOKEN_PATH, 'utf-8').trim();
+  } catch {
+    return '';
+  }
+}
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function buildUpstreamUrl(request: Request, path: string[]) {
+function buildUpstreamUrl(request: Request, routePath: string[]) {
   const url = new URL(request.url);
-  const pathname = path.join('/');
+  const pathname = routePath.join('/');
   return `${BACKEND_URL}/api/${pathname}${url.search}`;
 }
 
@@ -15,6 +28,11 @@ function buildRequestHeaders(request: Request) {
   headers.delete('host');
   headers.delete('connection');
   headers.delete('content-length');
+  const token = getAuthToken();
+  if (token) {
+    headers.set('x-auth-token', token);
+  }
+  headers.set('host', '127.0.0.1:4800');
   return headers;
 }
 

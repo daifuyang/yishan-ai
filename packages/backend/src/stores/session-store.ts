@@ -29,6 +29,7 @@ export interface Session {
   status: 'idle' | 'streaming' | 'completed' | 'failed';
   streamingContent?: string;
   isPinned: boolean;
+  cwd: string;
   createdAt: number;
   updatedAt: number;
   messageCount?: number;
@@ -41,6 +42,7 @@ function toSession(s: {
   status: string;
   streamingContent?: string | null;
   isPinned: boolean;
+  cwd: string;
   createdAt: Date;
   updatedAt: Date;
   _count?: { messages: number };
@@ -52,6 +54,7 @@ function toSession(s: {
     status: s.status as Session['status'],
     streamingContent: s.streamingContent ?? undefined,
     isPinned: s.isPinned,
+    cwd: s.cwd,
     createdAt: s.createdAt.getTime(),
     updatedAt: s.updatedAt.getTime(),
     messageCount: s._count?.messages,
@@ -76,7 +79,7 @@ export async function getSession(id: string): Promise<Session | undefined> {
   return s ? toSession(s) : undefined;
 }
 
-export async function createSession(model: string, title?: string): Promise<Session> {
+export async function createSession(model: string, title?: string, cwd?: string): Promise<Session> {
   const session = await prisma.session.create({
     data: {
       id: crypto.randomUUID(),
@@ -84,6 +87,7 @@ export async function createSession(model: string, title?: string): Promise<Sess
       model,
       status: 'idle',
       isPinned: false,
+      cwd: cwd || '',
     },
     include: { _count: { select: { messages: true } } },
   });
@@ -98,6 +102,10 @@ export async function updateSessionTitle(id: string, title: string): Promise<voi
 
 export async function updateSessionPin(id: string, isPinned: boolean): Promise<void> {
   await prisma.session.update({ where: { id }, data: { isPinned } });
+}
+
+export async function updateSessionCwd(id: string, cwd: string): Promise<void> {
+  await prisma.session.update({ where: { id }, data: { cwd } });
 }
 
 export async function deleteSession(id: string): Promise<void> {

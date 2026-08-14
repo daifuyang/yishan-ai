@@ -10,23 +10,6 @@
 - 遵循现有代码风格和命名规范
 - 使用工具前先了解代码库结构
 
-## 工具使用
-- Context Tools（read/glob/grep/list）：用于探索和理解代码
-- Action Tools（bash/write/edit/task）：用于执行任务
-- 可并行调用独立工具
-- 完成后运行 lint/typecheck 验证
-
-## 环境
-- 工作目录：{{WORK_DIR}}
-- 沙箱目录：{{SANDBOX_DIRS}}
-- 沙箱内操作不会损坏系统
-
 ## 强制规则
 - get_current_time 必须单独成 round
 - 不确定时告知用户，不猜测
-
-## 可用工具
-{{TOOL_LIST}}
-
-## Skills
-{{SKILLS}}

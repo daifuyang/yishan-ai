@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, FolderOpen, Shield } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Lock, Shield } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DirectoryPicker } from '@/components/settings/directory-picker';
 import { Switch } from '@/components/ui/switch';
@@ -18,7 +18,7 @@ export default function SecuritySettingsPage() {
 }
 
 function SecuritySettings() {
-  const { workspace, tools, fetchConfig, updateConfig } = useConfigStore();
+  const { workspace, sandbox, approval, fetchConfig, updateConfig } = useConfigStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,8 +33,8 @@ function SecuritySettings() {
     await updateConfig({ workspace: { ...workspace, allowDelete } });
   };
 
-  const handleExecSecurityChange = async (security: 'allow' | 'ask' | 'deny') => {
-    await updateConfig({ tools: { ...tools, exec: { ...tools.exec, security } } });
+  const handleApprovalPolicyChange = async (policy: 'auto-allow' | 'ask' | 'deny') => {
+    await updateConfig({ approval: { ...approval, defaultPolicy: policy } });
   };
 
   if (loading) {
@@ -82,28 +82,52 @@ function SecuritySettings() {
           </div>
         </section>
 
-        {/* Execution Permission Section */}
+        {/* Sandbox Section */}
+        <section className="border rounded-lg p-4 bg-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Lock className="h-5 w-5" />
+            <h4 className="font-medium">沙箱隔离</h4>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              所有命令均在 macOS sandbox-exec 沙箱中执行，不可关闭。
+            </p>
+            <p className="text-sm">
+              当前模式：
+              <strong>
+                {sandbox.defaultMode === 'read-only'
+                  ? '只读'
+                  : sandbox.defaultMode === 'workspace-write'
+                    ? '工作区可写'
+                    : '完全访问'}
+              </strong>
+            </p>
+          </div>
+        </section>
+
+        {/* Approval Policy Section */}
         <section className="border rounded-lg p-4 bg-card">
           <div className="flex items-center gap-2 mb-4">
             <Shield className="h-5 w-5" />
-            <h4 className="font-medium">执行权限</h4>
+            <h4 className="font-medium">审批策略</h4>
           </div>
 
           <div className="space-y-3">
-            <span className="text-sm font-medium">安全级别</span>
+            <span className="text-sm font-medium">默认策略</span>
             <div className="flex gap-4">
-              {(['allow', 'ask', 'deny'] as const).map((level) => (
+              {(['auto-allow', 'ask', 'deny'] as const).map((level) => (
                 <label key={level} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
-                    name="exec-security"
+                    name="approval-policy"
                     value={level}
-                    checked={tools.exec.security === level}
-                    onChange={() => handleExecSecurityChange(level)}
+                    checked={approval.defaultPolicy === level}
+                    onChange={() => handleApprovalPolicyChange(level)}
                     className="accent-primary"
                   />
                   <span className="text-sm">
-                    {level === 'allow' ? '允许' : level === 'ask' ? '询问' : '拒绝'}
+                    {level === 'auto-allow' ? '自动允许' : level === 'ask' ? '询问' : '拒绝'}
                   </span>
                 </label>
               ))}
@@ -111,13 +135,13 @@ function SecuritySettings() {
 
             <div className="text-sm text-muted-foreground space-y-1 pl-6">
               <p>
-                • <strong>允许</strong>：AI 可以直接执行命令
+                • <strong>自动允许</strong>：AI 可以直接执行命令（开发模式）
               </p>
               <p>
                 • <strong>询问</strong>：AI 执行前需要用户确认
               </p>
               <p>
-                • <strong>拒绝</strong>：AI 无法执行命令
+                • <strong>拒绝</strong>：AI 无法执行任何命令
               </p>
             </div>
           </div>

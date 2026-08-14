@@ -20,6 +20,13 @@ const app: FastifyPluginAsync<AppOptions> = async (fastify, opts): Promise<void>
     options: opts,
   });
 
+  // Auto-migrate: add cwd column if missing
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE sessions ADD COLUMN cwd TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // Column already exists
+  }
+
   const streamingSessions = await prisma.session.findMany({
     where: { status: 'streaming' },
     select: { id: true },

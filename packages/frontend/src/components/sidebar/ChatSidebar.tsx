@@ -44,9 +44,9 @@ function ChatContent({ sessionId }: ChatContentProps) {
   }, [sessionId, fetchMessages]);
 
   const handleSend = useCallback(
-    (content: string, model: string, mode: 'plan' | 'build') => {
+    (content: string, model: string) => {
       if (sessionId) {
-        sendMessage(sessionId, content, model, mode);
+        sendMessage(sessionId, content, model);
       }
     },
     [sessionId, sendMessage]

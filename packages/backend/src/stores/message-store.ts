@@ -1,5 +1,6 @@
 import { getLogger } from '../lib/logger.js';
 import { prisma } from '../lib/stream-processor.js';
+import { appendEvent, buildMessages, getEvents } from './event-store.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -34,55 +35,23 @@ export interface StoredMessage {
   deletedAt?: number;
 }
 
-interface PrismaMessageRow {
-  id: string;
-  sessionId: string;
-  role: string;
-  content: string | object[];
-  toolCalls?: string | null;
-  createdAt: Date;
-  usageInput?: number | null;
-  usageOutput?: number | null;
-  deletedAt?: Date | null;
-}
-
-function parseContent(content: string | object[]): string | object[] {
-  if (typeof content === 'string') {
-    try {
-      return JSON.parse(content);
-    } catch {
-      return content;
-    }
-  }
-  return content;
-}
-
-function toStoredMessage(m: PrismaMessageRow): StoredMessage {
-  return {
-    id: m.id,
-    sessionId: m.sessionId,
-    role: m.role as 'user' | 'assistant',
-    content: parseContent(m.content),
-    toolCalls: m.toolCalls ? (JSON.parse(m.toolCalls) as unknown[]) : undefined,
-    createdAt: m.createdAt.getTime(),
-    usageInput: m.usageInput ?? undefined,
-    usageOutput: m.usageOutput ?? undefined,
-    deletedAt: m.deletedAt ? m.deletedAt.getTime() : undefined,
-  };
-}
-
 export async function getMessages(
   sessionId: string,
-  limit = 100,
-  offset = 0
+  _limit = 100,
+  _offset = 0
 ): Promise<StoredMessage[]> {
-  const messages = await prisma.message.findMany({
-    where: { sessionId, deletedAt: null },
-    orderBy: { createdAt: 'asc' },
-    take: limit,
-    skip: offset,
-  });
-  return messages.map(toStoredMessage);
+  const events = await getEvents(sessionId);
+  const agentMessages = buildMessages(events);
+
+  return agentMessages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .map((m, idx) => ({
+      id: `evt-${idx}`,
+      sessionId,
+      role: m.role as 'user' | 'assistant',
+      content: m.content as string | object[],
+      createdAt: events[0]?.createdAt.getTime() ?? Date.now(),
+    }));
 }
 
 export async function appendMessage(
@@ -92,70 +61,129 @@ export async function appendMessage(
   usage?: { inputTokens: number; outputTokens: number },
   toolCalls?: unknown[]
 ): Promise<StoredMessage> {
-  const contentJson = typeof content === 'string' ? content : JSON.stringify(content);
-  const toolCallsJson = toolCalls ? JSON.stringify(toolCalls) : null;
+  const messageId = crypto.randomUUID();
 
-  const message = await prisma.message.create({
-    data: {
-      id: crypto.randomUUID(),
-      sessionId,
-      role,
-      type: role === 'user' ? 'user' : 'assistant',
-      content: contentJson,
-      toolCalls: toolCallsJson,
-      usageInput: usage?.inputTokens,
-      usageOutput: usage?.outputTokens,
-    },
-  });
+  if (role === 'user') {
+    const text = typeof content === 'string' ? content : JSON.stringify(content);
+    await appendEvent(sessionId, { type: 'user-message', text, timestamp: Date.now() });
+  } else {
+    await appendEvent(sessionId, { type: 'assistant-start', messageId });
 
-  await prisma.session.update({
-    where: { id: sessionId },
-    data: { updatedAt: new Date() },
-  });
+    if (typeof content === 'string') {
+      if (content) {
+        await appendEvent(sessionId, { type: 'assistant-chunk', messageId, text: content });
+      }
+    } else {
+      for (const block of content) {
+        const b = block as Record<string, unknown>;
+        if (b.type === 'text') {
+          await appendEvent(sessionId, {
+            type: 'assistant-chunk',
+            messageId,
+            text: b.text as string,
+          });
+        } else if (b.type === 'tool_use') {
+          await appendEvent(sessionId, {
+            type: 'tool-call',
+            messageId,
+            callId: b.id as string,
+            name: b.name as string,
+            args: (b.input as Record<string, unknown>) ?? {},
+          });
+        }
+      }
+    }
 
-  storeLog(sessionId, 'DEBUG', 'Message appended', {
-    messageId: message.id.slice(0, 8),
+    if (toolCalls) {
+      for (const tc of toolCalls) {
+        const t = tc as Record<string, unknown>;
+        await appendEvent(sessionId, {
+          type: 'tool-call',
+          messageId,
+          callId: (t.id as string) ?? crypto.randomUUID(),
+          name: t.name as string,
+          args: (t.input as Record<string, unknown>) ?? {},
+        });
+      }
+    }
+
+    await appendEvent(sessionId, { type: 'assistant-done', messageId });
+  }
+
+  storeLog(sessionId, 'DEBUG', 'Message appended via events', {
+    messageId: messageId.slice(0, 8),
     role,
     contentLength: typeof content === 'string' ? content.length : JSON.stringify(content).length,
     toolCallCount: toolCalls?.length || 0,
   });
 
-  return toStoredMessage(message);
+  return {
+    id: messageId,
+    sessionId,
+    role,
+    content,
+    toolCalls,
+    createdAt: Date.now(),
+    usageInput: usage?.inputTokens,
+    usageOutput: usage?.outputTokens,
+  };
 }
 
 export async function rewriteMessages(
   sessionId: string,
   messages: { role: string; content: unknown }[]
 ): Promise<void> {
-  await prisma.message.deleteMany({ where: { sessionId } });
+  await prisma.sessionEvent.deleteMany({ where: { sessionId } });
 
-  await prisma.message.createMany({
-    data: messages.map((msg) => ({
-      id: crypto.randomUUID(),
-      sessionId,
-      role: msg.role,
-      type: msg.role === 'user' ? 'user' : 'assistant',
-      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-    })),
-  });
+  for (const msg of messages) {
+    const role = msg.role as 'user' | 'assistant';
+    const content = msg.content;
 
-  await prisma.session.update({
-    where: { id: sessionId },
-    data: { updatedAt: new Date() },
-  });
+    if (role === 'user') {
+      const text = typeof content === 'string' ? content : JSON.stringify(content);
+      await appendEvent(sessionId, { type: 'user-message', text, timestamp: Date.now() });
+    } else {
+      const messageId = crypto.randomUUID();
+      await appendEvent(sessionId, { type: 'assistant-start', messageId });
 
-  storeLog(sessionId, 'DEBUG', 'Messages rewritten', { messageCount: messages.length });
+      if (typeof content === 'string') {
+        if (content) {
+          await appendEvent(sessionId, { type: 'assistant-chunk', messageId, text: content });
+        }
+      } else if (Array.isArray(content)) {
+        for (const block of content) {
+          const b = block as Record<string, unknown>;
+          if (b.type === 'text') {
+            await appendEvent(sessionId, {
+              type: 'assistant-chunk',
+              messageId,
+              text: b.text as string,
+            });
+          } else if (b.type === 'tool_use') {
+            await appendEvent(sessionId, {
+              type: 'tool-call',
+              messageId,
+              callId: (b.id as string) ?? crypto.randomUUID(),
+              name: b.name as string,
+              args: (b.input as Record<string, unknown>) ?? {},
+            });
+          }
+        }
+      }
+
+      await appendEvent(sessionId, { type: 'assistant-done', messageId });
+    }
+  }
+
+  storeLog(sessionId, 'DEBUG', 'Messages rewritten via events', { messageCount: messages.length });
 }
 
 export async function getAnthropicMessages(
   sessionId: string
 ): Promise<{ role: string; content: unknown }[]> {
-  const messages = await prisma.message.findMany({
-    where: { sessionId, deletedAt: null },
-    orderBy: { createdAt: 'asc' },
-    select: { role: true, content: true },
-  });
-  return messages.map((m) => ({ role: m.role, content: parseContent(m.content) }));
+  const events = await getEvents(sessionId);
+  const messages = buildMessages(events);
+  return messages.map((m) => ({ role: m.role, content: m.content }));
 }
 
 export async function softDeleteMessagesAfter(sessionId: string, messageId: string): Promise<void> {

@@ -1,5 +1,8 @@
+import type { MCPTool } from '@yishan-ai/shared';
 import { create } from 'zustand';
 import { apiUrl } from '@/lib/api-base';
+
+export type { MCPTool };
 
 export interface MCPServer {
   name: string;
@@ -13,12 +16,6 @@ export interface MCPServer {
   status: 'disconnected' | 'connecting' | 'connected' | 'error';
   tools: MCPTool[];
   error?: string;
-}
-
-export interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
 }
 
 interface MCPSStore {

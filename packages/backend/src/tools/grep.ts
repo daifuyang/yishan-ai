@@ -1,7 +1,10 @@
+import { execFile } from 'node:child_process';
 import * as path from 'node:path';
-import { grepInSandbox } from './docker-sandbox.js';
-import { logPermission } from './permission-log.js';
-import type { ExecuteResult, Tool, ToolContext } from './types.js';
+import { promisify } from 'node:util';
+import { isPathContained } from '../sandbox/path-check.js';
+import type { Tool, ToolContext } from './types.js';
+
+const execFileAsync = promisify(execFile);
 
 interface GrepArgs {
   pattern: string;
@@ -12,12 +15,6 @@ interface GrepArgs {
   limit?: number;
   after?: number;
   before?: number;
-}
-
-function isWithinDirectory(targetPath: string, directory: string): boolean {
-  const resolved = path.resolve(targetPath);
-  const dirResolved = path.resolve(directory);
-  return resolved.startsWith(dirResolved + path.sep) || resolved === dirResolved;
 }
 
 export function createGrepTool(): Tool {
@@ -62,12 +59,11 @@ export function createGrepTool(): Tool {
       },
       required: ['pattern'],
     },
-    async execute(args: unknown, ctx: ToolContext): Promise<ExecuteResult> {
+    async execute(args: unknown, ctx: ToolContext): Promise<string> {
       const {
         pattern,
         path: searchPath,
         include,
-        exclude,
         caseSensitive = false,
         limit = 50,
       } = args as GrepArgs;
@@ -82,35 +78,30 @@ export function createGrepTool(): Tool {
           : path.resolve(ctx.directory, searchPath)
         : ctx.directory;
 
-      if (!isWithinDirectory(workDir, ctx.directory)) {
+      if (!isPathContained(workDir, ctx.directory)) {
         throw new Error(`Access denied: ${searchPath || '/'} is outside workspace`);
       }
 
-      logPermission(ctx.sessionId, 'read', { path: workDir });
-
       try {
-        const output = await grepInSandbox(pattern, workDir, workDir, {
-          include,
-          caseSensitive,
+        const grepArgs: string[] = ['-r'];
+        if (!caseSensitive) grepArgs.push('-i');
+        if (include) grepArgs.push(`--include=${include}`);
+        grepArgs.push(pattern, workDir);
+
+        const { stdout } = await execFileAsync('grep', grepArgs, {
+          timeout: 30000,
+          maxBuffer: 5 * 1024 * 1024,
+        }).catch((err) => {
+          if (err.code === 1) return { stdout: '', stderr: '' };
+          throw err;
         });
 
-        const matches = output
+        const matches = stdout
           .split('\n')
           .filter((line) => line.trim())
           .slice(0, limit);
 
-        return {
-          title: `Grep: ${pattern}`,
-          output: matches.length > 0 ? matches.join('\n') : `No matches found for "${pattern}"`,
-          metadata: {
-            pattern,
-            path: workDir,
-            include,
-            exclude,
-            matchCount: matches.length,
-            truncated: matches.length >= limit,
-          },
-        };
+        return matches.length > 0 ? matches.join('\n') : `No matches found for "${pattern}"`;
       } catch (error: unknown) {
         const err = error as { code?: string };
         if (err.code === 'EACCES') {

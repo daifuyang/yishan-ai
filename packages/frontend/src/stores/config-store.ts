@@ -17,13 +17,16 @@ export interface ConfigState {
     directories: string[];
     allowDelete: boolean;
   };
+  sandbox: {
+    defaultMode: 'read-only' | 'workspace-write' | 'full-access';
+  };
+  approval: {
+    defaultPolicy: 'auto-allow' | 'ask' | 'deny';
+  };
   tools: {
     fs: {
       enabled: boolean;
       workspaceOnly: boolean;
-    };
-    exec: {
-      security: 'allow' | 'ask' | 'deny';
     };
   };
   fetchConfig: () => Promise<void>;
@@ -40,13 +43,16 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     directories: [],
     allowDelete: false,
   },
+  sandbox: {
+    defaultMode: 'workspace-write',
+  },
+  approval: {
+    defaultPolicy: 'auto-allow',
+  },
   tools: {
     fs: {
       enabled: true,
       workspaceOnly: true,
-    },
-    exec: {
-      security: 'ask',
     },
   },
 
@@ -60,9 +66,10 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         models: [],
       },
       workspace: config.workspace || { directories: [], allowDelete: false },
+      sandbox: config.sandbox || { defaultMode: 'workspace-write' },
+      approval: config.approval || { defaultPolicy: 'auto-allow' },
       tools: config.tools || {
         fs: { enabled: true, workspaceOnly: true },
-        exec: { security: 'ask' },
       },
     });
   },

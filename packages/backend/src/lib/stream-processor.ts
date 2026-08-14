@@ -1,11 +1,11 @@
 import { EventEmitter } from 'node:events';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
+import type { MCPTool } from '@yishan-ai/shared';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { autoTitle } from '../stores/session-store.js';
 import type { ConfigSchema } from './config-manager.js';
 import { configManager } from './config-manager.js';
 import { getLogger } from './logger.js';
-import type { MCPTool } from './mcp-manager.js';
 
 const dbUrl = process.env.DATABASE_URL || `file:${configManager.get<string>('data.dir')}`;
 const adapter = new PrismaLibSql({ url: dbUrl });
@@ -94,13 +94,10 @@ class StreamProcessor extends EventEmitter {
   async submitTask(params: {
     sessionId: string;
     userMessage: string;
-    mode: 'plan' | 'build';
     systemPrompt: string;
-    planReminder?: string;
-    buildSwitch?: string;
     tools: MCPTool[];
   }): Promise<{ messageId: string; queued: boolean }> {
-    const { sessionId, userMessage, mode, systemPrompt, planReminder, buildSwitch, tools } = params;
+    const { sessionId, userMessage, systemPrompt, tools } = params;
 
     if (this.runningTasks.has(sessionId)) {
       return { messageId: '', queued: true };
@@ -118,7 +115,6 @@ class StreamProcessor extends EventEmitter {
         role: 'user',
         type: 'user',
         content: userMessage,
-        mode,
       },
     });
 
@@ -129,15 +125,7 @@ class StreamProcessor extends EventEmitter {
       data: { status: 'streaming', streamingContent: '' },
     });
 
-    this.processTask(
-      sessionId,
-      mode,
-      systemPrompt,
-      planReminder,
-      buildSwitch,
-      tools,
-      abortController.signal
-    ).catch((err: Error) => {
+    this.processTask(sessionId, systemPrompt, tools, abortController.signal).catch((err: Error) => {
       console.error(`[STREAM_PROC] Task ${sessionId} failed:`, err.message);
       let errorMessage = err.message;
       if (
@@ -242,10 +230,7 @@ class StreamProcessor extends EventEmitter {
 
   private async processTask(
     sessionId: string,
-    mode: 'plan' | 'build',
     systemPrompt: string,
-    planReminder: string | undefined,
-    buildSwitch: string | undefined,
     tools: MCPTool[],
     signal: AbortSignal
   ) {
@@ -398,20 +383,11 @@ class StreamProcessor extends EventEmitter {
           input_schema: (t.inputSchema || {}) as Record<string, unknown>,
         }));
 
-        const wasPlanMode = messages.some((m) => m.role === 'assistant' && m.mode === 'plan');
-
-        let effectiveSystemPrompt = systemPrompt;
-        if (mode === 'plan' && !wasPlanMode && planReminder) {
-          effectiveSystemPrompt += `\n\n${planReminder}`;
-        } else if (mode === 'build' && wasPlanMode && buildSwitch) {
-          effectiveSystemPrompt += `\n\n${buildSwitch}`;
-        }
-
         const stream = client.messages.stream({
           model,
           max_tokens: 4096,
           temperature: 1,
-          system: effectiveSystemPrompt,
+          system: systemPrompt,
           messages: formattedMessages as never,
           tools: apiTools as never,
         });
@@ -568,7 +544,7 @@ class StreamProcessor extends EventEmitter {
                       | undefined;
                     let toolError: string | undefined;
                     try {
-                      result = (await this.callTool(toolName, args)) as {
+                      result = (await this.callTool(toolName, args, sessionId)) as {
                         content?: Array<{ type: string; text?: string }>;
                         text?: string;
                       };
@@ -699,7 +675,6 @@ class StreamProcessor extends EventEmitter {
                   role: 'assistant',
                   type: 'final',
                   content: pendingAssistantContent,
-                  mode,
                 },
               })
               .catch((e: Error) => {
@@ -746,7 +721,6 @@ class StreamProcessor extends EventEmitter {
                 role: 'assistant',
                 type: 'final',
                 content: JSON.stringify(toolUseBlocks),
-                mode,
               },
             })
             .catch((e: Error) => {
@@ -851,16 +825,31 @@ class StreamProcessor extends EventEmitter {
     }
   }
 
-  private async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  private async callTool(
+    name: string,
+    args: Record<string, unknown>,
+    sessionId: string
+  ): Promise<unknown> {
     const directories = configManager.get<string[]>('workspace.directories');
-    const directory = directories?.[0] || process.cwd();
+    const defaultDir = directories?.[0] || process.cwd();
+
+    let directory = defaultDir;
+    if (sessionId) {
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { cwd: true },
+      });
+      if (session?.cwd) {
+        directory = session.cwd;
+      }
+    }
 
     try {
       const { toolRegistry } = await import('../tools/index.js');
 
       if (toolRegistry.has(name)) {
-        const result = await toolRegistry.call(name, args, {
-          sessionId: '',
+        const output = await toolRegistry.call(name, args, {
+          sessionId: sessionId || '',
           messageId: '',
           agent: '',
           abort: new AbortController().signal,
@@ -869,7 +858,7 @@ class StreamProcessor extends EventEmitter {
         });
 
         return {
-          content: [{ type: 'text', text: result.output }],
+          content: [{ type: 'text', text: output }],
           isError: false,
         };
       }

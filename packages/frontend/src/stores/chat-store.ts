@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { apiUrl } from '@/lib/api-base';
-import { type SSEHandlerConfig, sseManager } from '@/lib/sse-manager';
+import { applyEvent, type ChatState, msgId } from '@/lib/message-reducer';
+import {
+  type AgentEvent,
+  connectToSession,
+  type SSEConnection,
+  type SSEHandlers,
+} from '@/lib/sse-client';
 import type {
   ActiveStream,
   ContentBlock,
@@ -10,30 +16,19 @@ import type {
   ToolCall,
 } from '@/types';
 
-let _msgSeq = 0;
-const msgId = () => `msg-${++_msgSeq}`;
-
 const MESSAGES_KEY = 'yishan-messages';
 
-interface ChatStore {
-  messages: Message[];
-  isStreaming: boolean;
-  isFetchingMessages: boolean;
-  streamingContent: string;
-  pendingMessageId: string | null;
-  activeStream: ActiveStream | null;
+interface ChatStore extends ChatState {
   fetchMessages: (sessionId: string) => Promise<void>;
   sendMessage: (
     sessionId: string,
     content: string,
-    model: string,
-    mode?: 'plan' | 'build'
+    model: string
   ) => Promise<{ success: boolean; error?: string }>;
   retryMessage: (
     sessionId: string,
     messageId: string,
-    model: string,
-    mode?: 'plan' | 'build'
+    model: string
   ) => Promise<{ success: boolean; error?: string }>;
   subscribe: (sessionId: string) => void;
   unsubscribe: () => void;
@@ -45,178 +40,40 @@ interface ChatStore {
     error?: string
   ) => void;
   rollbackMessage: (sessionId: string, messageId: string) => Promise<string | null>;
+  handleAgentEvent: (event: AgentEvent) => void;
   saveMessages: () => void;
   loadMessages: () => void;
   clearStoredMessages: () => void;
 }
 
-function createToolCallHandler(): SSEHandlerConfig {
-  const updateAssistantContent = (msg: Message, textDelta: string): Message => {
-    if (typeof msg.content === 'string') {
-      return { ...msg, content: msg.content + textDelta };
-    }
-    const blocks = msg.content as ContentBlock[];
-    const lastTextBlockIndex = blocks.findLastIndex((b) => b.type === 'text');
-    if (lastTextBlockIndex >= 0) {
-      const updatedBlocks = [...blocks];
-      updatedBlocks[lastTextBlockIndex] = {
-        ...updatedBlocks[lastTextBlockIndex],
-        text: (updatedBlocks[lastTextBlockIndex].text || '') + textDelta,
-      };
-      return { ...msg, content: updatedBlocks };
-    }
-    return { ...msg, content: [...blocks, { type: 'text', text: textDelta }] };
-  };
+let connection: SSEConnection | null = null;
 
-  const setContentWithCatchup = (msg: Message, newContent: string): Message => {
-    if (typeof msg.content === 'string') {
-      return { ...msg, content: newContent };
-    }
-    const blocks = msg.content as ContentBlock[];
-    const textBlocks = blocks.filter((b) => b.type === 'text');
-    if (textBlocks.length > 0) {
-      const lastTextIdx = blocks.findLastIndex((b) => b.type === 'text');
-      const updatedBlocks = [...blocks];
-      updatedBlocks[lastTextIdx] = {
-        ...updatedBlocks[lastTextIdx],
-        text: newContent,
-      };
-      return { ...msg, content: updatedBlocks };
-    }
-    return { ...msg, content: [...blocks, { type: 'text', text: newContent }] };
-  };
+function disconnect() {
+  connection?.disconnect();
+  connection = null;
+}
 
+function buildSSEHandlers(): SSEHandlers {
   return {
-    onContentCatchup: (data) => {
-      useChatStore.setState((state) => {
-        const assistantId = state.activeStream?.assistantId;
-        if (!assistantId) return {};
-        return {
-          messages: state.messages.map((msg) =>
-            msg.id === assistantId ? setContentWithCatchup(msg, data.content) : msg
-          ),
-          streamingContent: data.content,
-        };
-      });
+    content_catchup: (e) => useChatStore.getState().handleAgentEvent(e),
+    content_block_delta: (e) => useChatStore.getState().handleAgentEvent(e),
+    tool_call: (e) => useChatStore.getState().handleAgentEvent(e),
+    tool_result: (e) => useChatStore.getState().handleAgentEvent(e),
+    tool_error: (e) => useChatStore.getState().handleAgentEvent(e),
+    message_stop: (e) => {
+      useChatStore.getState().handleAgentEvent(e);
+      disconnect();
     },
-    onContentBlockDelta: (data) => {
-      useChatStore.setState((state) => {
-        const assistantId = state.activeStream?.assistantId;
-        if (!assistantId) return {};
-        return {
-          messages: state.messages.map((msg) =>
-            msg.id === assistantId ? updateAssistantContent(msg, data.delta.text) : msg
-          ),
-          streamingContent: state.streamingContent + data.delta.text,
-        };
-      });
-    },
-    onToolCall: (data) => {
-      const toolUseBlock: ContentBlock = {
-        type: 'tool_use',
-        id: msgId(),
-        name: data.data.tool,
-        input: { ...(data.data.args || {}), description: data.data.description },
-      };
-      useChatStore.setState((state) => {
-        const assistantId = state.activeStream?.assistantId;
-        if (!assistantId) return {};
-        const assistantMsg = state.messages.find((msg) => msg.id === assistantId);
-        if (!assistantMsg) return {};
-        const existingContent = Array.isArray(assistantMsg.content) ? assistantMsg.content : [];
-        const updatedContent: ContentBlock[] = [...existingContent, toolUseBlock];
-        return {
-          messages: state.messages.map((msg) =>
-            msg.id === assistantId ? { ...msg, content: updatedContent } : msg
-          ),
-        };
-      });
-    },
-    onToolResult: (data) => {
-      useChatStore.setState((state) => {
-        const assistantId = state.activeStream?.assistantId;
-        if (!assistantId) return {};
-        return {
-          messages: state.messages.map((msg) => {
-            if (msg.id !== assistantId) return msg;
-            if (!Array.isArray(msg.content)) return msg;
-            const targetIdx = msg.content.findIndex(
-              (c: ContentBlock) => c.type === 'tool_use' && !c.result
-            );
-            if (targetIdx < 0) return msg;
-            const updatedContent = [...msg.content];
-            const targetBlock = updatedContent[targetIdx] as ContentBlock;
-            updatedContent[targetIdx] = { ...targetBlock, result: data.data.result };
-            return { ...msg, content: updatedContent };
-          }),
-        };
-      });
-    },
-    onToolError: (data) => {
-      useChatStore.setState((state) => {
-        const assistantId = state.activeStream?.assistantId;
-        if (!assistantId) return {};
-        return {
-          messages: state.messages.map((msg) => {
-            if (msg.id !== assistantId) return msg;
-            if (!Array.isArray(msg.content)) return msg;
-            const targetIdx = msg.content.findIndex(
-              (c: ContentBlock) => c.type === 'tool_use' && !c.error
-            );
-            if (targetIdx < 0) return msg;
-            const updatedContent = [...msg.content];
-            const targetBlock = updatedContent[targetIdx] as ContentBlock;
-            updatedContent[targetIdx] = { ...targetBlock, error: data.data.error };
-            return { ...msg, content: updatedContent };
-          }),
-        };
-      });
-    },
-    onMessageStop: () => {
-      useChatStore.setState((state) => {
-        const { activeStream } = state;
-        if (!activeStream) return {};
-        return {
-          messages: state.messages.map((msg) => {
-            if (msg.id === activeStream.assistantId) {
-              return { ...msg, status: 'success' as const };
-            }
-            if (activeStream.userId && msg.id === activeStream.userId) {
-              return { ...msg, status: 'success' as const };
-            }
-            return msg;
-          }),
-          isStreaming: false,
-          pendingMessageId: null,
-          activeStream: null,
-        };
-      });
-      sseManager.cleanup();
-    },
-    onError: (data) => {
-      useChatStore.setState((state) => {
-        const assistantId = state.activeStream?.assistantId;
-        const userId = state.activeStream?.userId;
-        if (!assistantId) return {};
-        return {
-          messages: state.messages.map((msg) => {
-            if (msg.id === assistantId) {
-              return { ...msg, status: 'failed' as const, error: data.message || '发生未知错误' };
-            }
-            if (userId && msg.id === userId) {
-              return { ...msg, status: 'failed' as const, error: data.message || '发生未知错误' };
-            }
-            return msg;
-          }),
-          isStreaming: false,
-          streamingContent: '',
-          pendingMessageId: null,
-          activeStream: null,
-        };
-      });
-      sseManager.cleanup();
+    error: (e) => {
+      useChatStore.getState().handleAgentEvent(e);
+      disconnect();
     },
   };
+}
+
+function connect(sessionId: string) {
+  disconnect();
+  connection = connectToSession(sessionId, buildSSEHandlers());
 }
 
 export const useChatStore = create<ChatStore>()((set, get) => ({
@@ -226,6 +83,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   streamingContent: '',
   pendingMessageId: null as string | null,
   activeStream: null as ActiveStream | null,
+
+  handleAgentEvent: (event: AgentEvent) => {
+    set((state) => applyEvent(state, event));
+  },
 
   saveMessages: () => {
     const state = get();
@@ -409,7 +270,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }
   },
 
-  sendMessage: async (sessionId, content, model, mode) => {
+  sendMessage: async (sessionId, content, model) => {
     const userTempId = msgId();
     const assistantTempId = msgId();
     set((state) => ({
@@ -430,15 +291,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       ],
     }));
 
-    sseManager.cleanup();
-
-    sseManager.subscribe(sessionId, createToolCallHandler());
+    connect(sessionId);
 
     try {
       const res = await fetch(apiUrl(`/api/sessions/${sessionId}/chat/stream`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, model, mode }),
+        body: JSON.stringify({ content, model }),
       });
 
       if (!res.ok) {
@@ -457,7 +316,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           pendingMessageId: null,
           activeStream: null,
         }));
-        sseManager.cleanup();
+        disconnect();
         return { success: false, error: errorData.error || `错误 ${res.status}` };
       }
 
@@ -484,12 +343,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         pendingMessageId: null,
         activeStream: null,
       }));
-      sseManager.cleanup();
+      disconnect();
       return { success: false, error: errorMessage };
     }
   },
 
-  retryMessage: async (sessionId, messageId, model, mode) => {
+  retryMessage: async (sessionId, messageId, model) => {
     const state = get();
     const msg = state.messages.find((m) => m.id === messageId);
     if (!msg || msg.role !== 'user') {
@@ -515,15 +374,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       activeStream: { sessionId, userId: messageId, assistantId: assistantTempId },
     }));
 
-    sseManager.cleanup();
-
-    sseManager.subscribe(sessionId, createToolCallHandler());
+    connect(sessionId);
 
     try {
       const res = await fetch(apiUrl(`/api/sessions/${sessionId}/chat/stream`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, model, mode }),
+        body: JSON.stringify({ content, model }),
       });
 
       if (!res.ok) {
@@ -538,7 +395,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           pendingMessageId: null,
           activeStream: null,
         }));
-        sseManager.cleanup();
+        disconnect();
         return { success: false, error: errorData.error || `错误 ${res.status}` };
       }
 
@@ -553,7 +410,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         pendingMessageId: null,
         activeStream: null,
       }));
-      sseManager.cleanup();
+      disconnect();
       return { success: false, error: errorMessage };
     }
   },
@@ -576,16 +433,16 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       console.warn('[subscribe] sessionId mismatch, refusing to subscribe');
       return;
     }
-    sseManager.subscribe(sessionId, createToolCallHandler());
+    connect(sessionId);
   },
 
   unsubscribe: () => {
-    sseManager.cleanup();
+    disconnect();
     set({ isStreaming: false, streamingContent: '', pendingMessageId: null, activeStream: null });
   },
 
   stopStream: async (sessionId) => {
-    sseManager.cleanup();
+    disconnect();
     try {
       await fetch(apiUrl(`/api/sessions/${sessionId}/chat/stop`), { method: 'POST' });
     } catch (_e) {
@@ -632,7 +489,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const targetMsg = state.messages[msgIndex];
     if (targetMsg.role !== 'user') return null;
 
-    sseManager.cleanup();
+    disconnect();
 
     try {
       await fetch(apiUrl(`/api/sessions/${sessionId}/messages?from=${messageId}`), {
